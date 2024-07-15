@@ -16,6 +16,9 @@ const Expert = {
     deleteExpert: (id, callback) => {
         const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
         db.query('UPDATE experts SET deleted_at = ? WHERE id = ?', [deletedAt, id], callback);
+    },
+    checkPhoneNumberExists: (phone_number, callback) => {
+        db.query('SELECT * FROM experts WHERE phone_number = ? AND deleted_at IS NULL', [phone_number], callback);
     }
 };
 

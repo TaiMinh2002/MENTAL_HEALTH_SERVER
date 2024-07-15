@@ -27,7 +27,7 @@ router.delete('/exercises/delete/:id', exercisesController.deleteExercise);
 // Expert routes
 router.get('/experts/', expertsController.getAllExperts);
 router.get('/experts/:id/detail', expertsController.getExpertById);
-router.post('/experts/upsert/:id?', expertsController.upsertExpert);
+router.post('/experts/upsert/:id?', uploadAvatar.single('avatar'), expertsController.upsertExpert);
 router.delete('/experts/delete/:id', expertsController.deleteExpert);
 
 // Forum routes
