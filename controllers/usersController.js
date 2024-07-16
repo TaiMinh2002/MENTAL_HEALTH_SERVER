@@ -9,6 +9,17 @@ const getBaseUrl = (req) => {
     return req.protocol + '://' + serverIp + ':' + process.env.PORT;
 };
 
+const getStatusString = (status) => {
+    switch (status) {
+        case 1:
+            return 'Đang sử dụng';
+        case 2:
+            return 'Tạm dừng';
+        default:
+            return 'Không xác định';
+    }
+};
+
 // Tải ảnh lên Firebase Storage
 const uploadToFirebase = (file) => {
     return new Promise((resolve, reject) => {
@@ -50,12 +61,19 @@ exports.getAllUsers = (req, res) => {
                 return res.status(500).json({ error: err });
             }
             const total = countResults[0].total;
+
+            // Thêm status_string vào kết quả trả về
+            const usersWithStatusString = results.map(user => ({
+                ...user,
+                status_string: getStatusString(user.status),
+            }));
+
             res.json({
                 page: parseInt(page),
                 limit: parseInt(limit),
                 total,
                 total_page: Math.ceil(total / limit),
-                users: results,
+                users: usersWithStatusString,
             });
         });
     });
@@ -71,7 +89,11 @@ exports.getUserById = (req, res) => {
         if (results.length === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
-        res.json(results[0]);
+
+        const user = results[0];
+        user.status_string = getStatusString(user.status);
+
+        res.json(user);
     });
 };
 
@@ -191,3 +213,27 @@ exports.deleteUser = (req, res) => {
         });
     });
 };
+
+// Tạm dừng tài khoản người dùng
+exports.pauseUser = (req, res) => {
+    const { id } = req.params;
+
+    User.getUserById(id, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const userData = { status: 2 };
+
+        User.updateUser(id, userData, (err, updateResults) => {
+            if (err) {
+                return res.status(500).json({ error: err });
+            }
+            res.json({ message: 'User account paused successfully', status_string: 'Tạm dừng' });
+        });
+    });
+};
+

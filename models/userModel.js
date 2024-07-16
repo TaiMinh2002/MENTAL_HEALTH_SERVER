@@ -30,6 +30,10 @@ const User = {
     },
     checkIfUserExists: (id, callback) => {
         db.query('SELECT * FROM users WHERE id = ?', [id], callback);
+    },
+    pauseUser: (id, callback) => {
+        const status = 2;
+        db.query('UPDATE users SET status = ? WHERE id = ?', [status, id], callback);
     }
 };
 

@@ -58,6 +58,7 @@ router.delete('/reminders/delete/:id', remindersController.deleteReminder);
 router.get('/users/', usersController.getAllUsers);
 router.get('/users/:id/detail', usersController.getUserById);
 router.post('/users/upsert/:id?', uploadAvatar.single('avatar'), usersController.upsertUser);
+router.patch('/users/:id/pause', usersController.pauseUser);
 router.delete('/users/delete/:id', usersController.deleteUser);
 
 // User-exercises routes
