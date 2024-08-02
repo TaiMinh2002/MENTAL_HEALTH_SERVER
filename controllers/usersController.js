@@ -161,14 +161,16 @@ exports.upsertUser = async (req, res) => {
                 if (err) {
                     return res.status(500).json({ error: err });
                 }
-                if (results.length > 0) {
+
+                if (results && results.length > 0) {
                     return res.status(400).json({ error: 'Email already exists' });
                 }
-                User.createUser(userData, (err, insertResults) => {
+
+                User.createUser(userData, (err, createResults) => {
                     if (err) {
                         return res.status(500).json({ error: err });
                     }
-                    res.json({ id: insertResults.insertId, avatar });
+                    res.json({ message: 'User created successfully', data: { id: createResults.insertId } });
                 });
             });
         });
@@ -183,14 +185,16 @@ const updateUser = (id, userData, res, req) => {
         if (err) {
             return res.status(500).json({ error: err });
         }
+
         if (results.length === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
+
         User.updateUser(id, userData, (err, updateResults) => {
             if (err) {
                 return res.status(500).json({ error: err });
             }
-            res.json({ message: 'User updated successfully', avatar: userData.avatar ? getBaseUrl(req) + userData.avatar : null });
+            res.json({ message: 'User updated successfully', data: updateResults });
         });
     });
 };

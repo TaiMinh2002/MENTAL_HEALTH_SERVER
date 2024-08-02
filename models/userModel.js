@@ -8,10 +8,20 @@ const User = {
         db.query(query, values, callback);
     },
     getUserById: (id, callback) => {
-        db.query('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [id], callback);
+        db.query('SELECT * FROM users WHERE id = ?', [id], (err, results) => {
+            if (err) {
+                return callback(err, null);
+            }
+            return callback(null, results);
+        });
     },
     getUserByEmail: (email, callback) => {
-        db.query('SELECT * FROM users WHERE email = ?', [email], callback);
+        db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
+            if (err) {
+                return callback(err, null);
+            }
+            return callback(null, results);
+        });
     },
     countAllUsers: (keyword, callback) => {
         const query = `SELECT COUNT(*) AS total FROM users WHERE deleted_at IS NULL AND username LIKE ?`;
@@ -19,10 +29,20 @@ const User = {
         db.query(query, [value], callback);
     },
     createUser: (userData, callback) => {
-        db.query('INSERT INTO users SET ?', userData, callback);
+        db.query('INSERT INTO users SET ?', userData, (err, results) => {
+            if (err) {
+                return callback(err, null);
+            }
+            return callback(null, results);
+        });
     },
     updateUser: (id, userData, callback) => {
-        db.query('UPDATE users SET ? WHERE id = ?', [userData, id], callback);
+        db.query('UPDATE users SET ? WHERE id = ?', [userData, id], (err, results) => {
+            if (err) {
+                return callback(err, null);
+            }
+            return callback(null, results);
+        });
     },
     deleteUser: (id, callback) => {
         const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
