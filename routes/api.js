@@ -40,8 +40,10 @@ router.delete('/experts/:id', expertsController.deleteExpert);
 // Forum routes
 router.get('/forums', verifyToken, forumsController.getAllForums);
 router.get('/forums/:id', verifyToken, forumsController.getForumById);
-router.post('/forums/upsert', verifyToken, uploadAvatar.single('cover_image'), forumsController.upsertForum);
-router.delete('/forums/:id', verifyToken, forumsController.deleteForum);
+router.post('/forums/upsert/:id?', verifyToken, uploadAvatar.single('cover_image'), forumsController.upsertForum);
+router.delete('/forums/:id/delete', verifyToken, forumsController.deleteForum);
+router.post('/forums/join', verifyToken, forumsController.joinForum);
+router.post('/forums/leave', verifyToken, forumsController.outForum);
 
 // Mood entries routes
 router.get('/mood-entries', verifyToken, moodEntriesController.getAllMoodEntries);
