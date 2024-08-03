@@ -28,7 +28,7 @@ router.delete('/appointments/:id', verifyToken, appointmentsController.deleteApp
 // Exercise routes
 router.get('/exercises', exercisesController.getAllExercises);
 router.get('/exercises/:id', exercisesController.getExerciseById);
-router.post('/exercises/upsert', uploadVideo.single('media_url'), exercisesController.upsertExercise);
+router.post('/exercises/upsert/:id?', uploadVideo.single('media_url'), exercisesController.upsertExercise);
 router.delete('/exercises/:id', exercisesController.deleteExercise);
 
 // Expert routes
