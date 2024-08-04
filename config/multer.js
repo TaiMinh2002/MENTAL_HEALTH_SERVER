@@ -43,7 +43,29 @@ const uploadVideo = multer({
     fileFilter: videoFileFilter
 });
 
+// Bộ nhớ tạm thời cho ảnh
+const imageStorage = multer.memoryStorage();
+
+// Bộ lọc file để chỉ cho phép các định dạng ảnh
+const imageFileFilter = (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) {
+        return cb(null, true);
+    }
+    cb('Error: Only images are allowed!');
+};
+
+// Cấu hình multer cho ảnh
+const uploadImages = multer({
+    storage: imageStorage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn kích thước file là 5MB
+    fileFilter: imageFileFilter
+});
+
 module.exports = {
     uploadAvatar,
-    uploadVideo
+    uploadVideo,
+    uploadImages
 };

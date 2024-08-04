@@ -66,6 +66,24 @@ const Forum = {
         const query = `SELECT COUNT(*) AS total FROM forums WHERE deleted_at IS NULL AND title LIKE ?`;
         const value = `%${keyword}%`;
         db.query(query, [value], callback);
+    },
+
+    incrementPostCount: (forum_id, callback) => {
+        db.query('UPDATE forums SET post_count = post_count + 1 WHERE id = ?', [forum_id], (err, results) => {
+            if (err) {
+                console.error('SQL Error:', err);
+            }
+            callback(err, results);
+        });
+    },
+
+    decrementPostCount: (forum_id, callback) => {
+        db.query('UPDATE forums SET post_count = post_count - 1 WHERE id = ?', [forum_id], (err, results) => {
+            if (err) {
+                console.error('SQL Error:', err);
+            }
+            callback(err, results);
+        });
     }
 };
 
