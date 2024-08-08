@@ -15,6 +15,7 @@ const { uploadAvatar, uploadVideo, uploadImages } = require('../config/multer');
 const verifyToken = require('../middleware/authMiddleware');
 
 // Auth routes
+router.post('/signup', authController.signup);
 router.post('/login', authController.login);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authController.logout);
@@ -66,7 +67,7 @@ router.delete('/reminders/:id/delete', verifyToken, remindersController.deleteRe
 // User routes
 router.get('/users', usersController.getAllUsers);
 router.get('/users/:id/detail', usersController.getUserById);
-router.post('/users/upsert/:id?', uploadAvatar.single('avatar'), usersController.upsertUser);
+router.post('/users/update', verifyToken, uploadAvatar.single('avatar'), usersController.updateUser);
 router.post('/users/:id/delete', usersController.deleteUser);
 router.post('/users/:id/pause', usersController.pauseUser);
 

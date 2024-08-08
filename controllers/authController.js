@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/userModel');
+const validator = require('validator');
 const { SECRET_KEY, TOKEN_EXPIRATION, REFRESH_TOKEN_EXPIRATION } = process.env;
 
 const revokedTokens = [];
@@ -13,6 +14,48 @@ const generateToken = (user) => {
 // Generate Refresh Token
 const generateRefreshToken = (user) => {
     return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: REFRESH_TOKEN_EXPIRATION });
+};
+
+exports.signup = async (req, res) => {
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+        return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (!validator.isEmail(email)) {
+        return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    if (!validator.isStrongPassword(password, { minLength: 8 })) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    const userData = { username, email, password: hash };
+
+    try {
+        User.getUserByEmail(email, async (err, existingUser) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+
+            if (existingUser.length > 0) {
+                return res.status(400).json({ error: 'Email already exists' });
+            }
+
+            User.createUser(userData, (err, result) => {
+                if (err) {
+                    console.error('Failed to create user:', err);
+                    return res.status(500).json({ error: 'Failed to create user' });
+                }
+                res.status(201).json({ message: 'User created successfully', data: { id: result.insertId } });
+            });
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to create user' });
+    }
 };
 
 // Login API

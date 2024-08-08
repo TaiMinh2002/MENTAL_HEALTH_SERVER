@@ -97,106 +97,50 @@ exports.getUserById = (req, res) => {
     });
 };
 
-// Tạo mới hoặc cập nhật thông tin người dùng (upsert)
-exports.upsertUser = async (req, res) => {
-    const { id } = req.params;
-    const { username, email, password } = req.body;
+// Cập nhật thông tin người dùng
+exports.updateUser = async (req, res) => {
+  const { id } = req.params;
+  const { username, email, password } = req.body;
+  let avatar;
 
-    let avatar = null;
-    if (req.file) {
-        try {
-            avatar = await uploadToFirebase(req.file);
-        } catch (error) {
-            return res.status(500).json({ error: 'Error uploading file to Firebase' });
-        }
+  if (req.file) {
+    try {
+      avatar = await uploadToFirebase(req.file);
+    } catch (error) {
+      return res.status(500).json({ error: 'Error uploading file to Firebase' });
     }
+  }
 
-    if (id) {
-        const userData = {};
-        if (username) userData.username = username;
-        if (email) {
-            if (!validator.isEmail(email)) {
-                return res.status(400).json({ error: 'Invalid email format' });
-            }
-            userData.email = email;
-        }
-        if (password) {
-            if (!validator.isStrongPassword(password, { minLength: 6, minLowercase: 1, minUppercase: 1, minSymbols: 1 })) {
-                return res.status(400).json({ error: 'Password must be at least 6 characters long, contain at least 1 uppercase letter, 1 lowercase letter, và 1 special character' });
-            }
-            bcrypt.hash(password, 10, (err, hash) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
-                userData.password = hash;
-                if (avatar) userData.avatar = avatar;
-                updateUser(id, userData, res, req);
-            });
-        } else {
-            if (avatar) userData.avatar = avatar;
-            updateUser(id, userData, res, req);
-        }
-    } else {
-        const errors = {};
-        if (!username) errors.username = 'Username is required';
-        if (!email) errors.email = 'Email is required';
-        if (!password) errors.password = 'Password is required';
+  if (!username || !email) {
+    return res.status(400).json({ error: 'Username and email are required' });
+  }
 
-        if (Object.keys(errors).length > 0) {
-            return res.status(400).json({ errors });
-        }
-        if (!validator.isEmail(email)) {
-            return res.status(400).json({ error: 'Invalid email format' });
-        }
-        if (!validator.isStrongPassword(password, { minLength: 6, minLowercase: 1, minUppercase: 1, minSymbols: 1 })) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters long, contain at least 1 uppercase letter, 1 lowercase letter, và 1 special character' });
-        }
-        bcrypt.hash(password, 10, (err, hash) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            const userData = { username, email, password: hash };
-            if (avatar) userData.avatar = avatar;
-            User.getUserByEmail(email, (err, results) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
+  if (!validator.isEmail(email)) {
+    return res.status(400).json({ error: 'Invalid email format' });
+  }
 
-                if (results && results.length > 0) {
-                    return res.status(400).json({ error: 'Email already exists' });
-                }
+  const userData = { username, email };
+  if (avatar) {
+    userData.avatar = avatar;
+  }
 
-                User.createUser(userData, (err, createResults) => {
-                    if (err) {
-                        return res.status(500).json({ error: err });
-                    }
-                    res.json({ message: 'User created successfully', data: { id: createResults.insertId } });
-                });
-            });
-        });
+  if (password) {
+    if (!validator.isStrongPassword(password, { minLength: 8 })) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
     }
-};
+    const hash = await bcrypt.hash(password, 10);
+    userData.password = hash;
+  }
 
-const updateUser = (id, userData, res, req) => {
-    if (Object.keys(userData).length === 0) {
-        return res.status(400).json({ error: 'No valid fields to update' });
+  try {
+    const result = await User.updateUser(id, userData);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
-    User.getUserById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        User.updateUser(id, userData, (err, updateResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            res.json({ message: 'User updated successfully', data: updateResults });
-        });
-    });
+    res.json({ message: 'User updated successfully', data: result });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user' });
+  }
 };
 
 // Xóa người dùng theo ID
