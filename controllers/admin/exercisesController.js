@@ -1,5 +1,5 @@
-const Exercise = require('../models/exerciseModel');
-const bucket = require('../firebase'); // Import Firebase Storage bucket
+const Exercise = require('../../models/admin/exerciseModel');
+const bucket = require('../../firebase'); // Import Firebase Storage bucket
 
 // Map type to string
 const typeToString = (type) => {

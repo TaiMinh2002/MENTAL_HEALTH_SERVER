@@ -1,4 +1,4 @@
-const Appointment = require('../models/appointmentModel');
+const Appointment = require('../../models/user/appointmentModel');
 
 // Lấy tất cả các cuộc hẹn
 exports.getAllAppointments = (req, res) => {

@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const validator = require('validator');
-const User = require('../models/userModel');
-const bucket = require('../firebase'); // Import Firebase Storage bucket
+const User = require('../../models/user/userModel');
+const bucket = require('../../firebase'); // Import Firebase Storage bucket
 require('dotenv').config();
 
 const getBaseUrl = (req) => {
@@ -99,48 +99,48 @@ exports.getUserById = (req, res) => {
 
 // Cập nhật thông tin người dùng
 exports.updateUser = async (req, res) => {
-  const { id } = req.params;
-  const { username, email, password } = req.body;
-  let avatar;
+    const { id } = req.params;
+    const { username, email, password } = req.body;
+    let avatar;
 
-  if (req.file) {
+    if (req.file) {
+        try {
+            avatar = await uploadToFirebase(req.file);
+        } catch (error) {
+            return res.status(500).json({ error: 'Error uploading file to Firebase' });
+        }
+    }
+
+    if (!username || !email) {
+        return res.status(400).json({ error: 'Username and email are required' });
+    }
+
+    if (!validator.isEmail(email)) {
+        return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    const userData = { username, email };
+    if (avatar) {
+        userData.avatar = avatar;
+    }
+
+    if (password) {
+        if (!validator.isStrongPassword(password, { minLength: 8 })) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
+        }
+        const hash = await bcrypt.hash(password, 10);
+        userData.password = hash;
+    }
+
     try {
-      avatar = await uploadToFirebase(req.file);
-    } catch (error) {
-      return res.status(500).json({ error: 'Error uploading file to Firebase' });
+        const result = await User.updateUser(id, userData);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ message: 'User updated successfully', data: result });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update user' });
     }
-  }
-
-  if (!username || !email) {
-    return res.status(400).json({ error: 'Username and email are required' });
-  }
-
-  if (!validator.isEmail(email)) {
-    return res.status(400).json({ error: 'Invalid email format' });
-  }
-
-  const userData = { username, email };
-  if (avatar) {
-    userData.avatar = avatar;
-  }
-
-  if (password) {
-    if (!validator.isStrongPassword(password, { minLength: 8 })) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
-    }
-    const hash = await bcrypt.hash(password, 10);
-    userData.password = hash;
-  }
-
-  try {
-    const result = await User.updateUser(id, userData);
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ message: 'User updated successfully', data: result });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update user' });
-  }
 };
 
 // Xóa người dùng theo ID

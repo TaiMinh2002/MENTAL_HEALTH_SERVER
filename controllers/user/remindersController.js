@@ -1,4 +1,4 @@
-const Reminder = require('../models/reminderModel');
+const Reminder = require('../../models/user/reminderModel');
 
 // Lấy tất cả các nhắc nhở
 exports.getAllReminders = (req, res) => {

@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const Expert = {
     getAllExperts: (page, limit, keyword, callback) => {

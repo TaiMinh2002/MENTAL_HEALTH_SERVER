@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const db = require('../../config/db');
 
 const User = {
   getAllUsers: (page, limit, keyword, callback) => {

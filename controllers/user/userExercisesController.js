@@ -1,4 +1,4 @@
-const UserExercise = require('../models/userExerciseModel');
+const UserExercise = require('../../models/user/userExerciseModel');
 
 // Lấy tất cả các bài tập của người dùng
 exports.getAllUserExercises = (req, res) => {

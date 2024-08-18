@@ -1,4 +1,4 @@
-const MoodEntry = require('../models/moodEntryModel');
+const MoodEntry = require('../../models/user/moodEntryModel');
 
 // Lấy tất cả các mục nhật ký tâm trạng
 exports.getAllMoodEntries = (req, res) => {

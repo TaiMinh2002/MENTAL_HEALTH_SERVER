@@ -1,6 +1,6 @@
-const Post = require('../models/postModel');
-const bucket = require('../firebase');
-const Forum = require('../models/forumModel');
+const Post = require('../../models/user/postModel');
+const bucket = require('../..//firebase');
+const Forum = require('../../models/user/forumModel');
 
 const uploadToFirebase = (file) => {
     return new Promise((resolve, reject) => {

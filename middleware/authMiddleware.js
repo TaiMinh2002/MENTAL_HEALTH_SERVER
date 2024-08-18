@@ -17,4 +17,17 @@ const verifyToken = (req, res, next) => {
     });
 };
 
-module.exports = verifyToken;
+const verifyRole = (roles) => {
+    return (req, res, next) => {
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).send('You do not have the required role to access this resource');
+        }
+        next();
+    };
+};
+
+
+module.exports = {
+    verifyToken,
+    verifyRole,
+};

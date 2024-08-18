@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const validator = require('validator');
-const Expert = require('../models/expertModel');
-const bucket = require('../firebase'); // Import Firebase Storage bucket
+const Expert = require('../../models/admin/expertModel');
+const bucket = require('../../firebase'); // Import Firebase Storage bucket
 require('dotenv').config();
 
 const getBaseUrl = (req) => {

@@ -1,5 +1,5 @@
-const Forum = require('../models/forumModel');
-const bucket = require('../firebase');
+const Forum = require('../../models/user/forumModel');
+const bucket = require('../../firebase');
 require('dotenv').config();
 
 const getBaseUrl = () => {
