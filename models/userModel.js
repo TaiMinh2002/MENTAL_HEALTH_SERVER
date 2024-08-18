@@ -22,12 +22,12 @@ const User = {
   },
   getUserByEmail: (email, callback) => {
     db.query('SELECT * FROM USERS WHERE email = ? AND deleted_at IS NULL', [email], (err, results) => {
-        if (err) {
-            return callback(err, null);
-        }
-        return callback(null, results);
+      if (err) {
+        return callback(err, null);
+      }
+      return callback(null, results);
     });
-},
+  },
   countAllUsers: (keyword, callback) => {
     const query = `SELECT COUNT(*) AS total FROM users WHERE deleted_at IS NULL AND username LIKE ?`;
     const value = `%${keyword}%`;
@@ -40,12 +40,12 @@ const User = {
   },
   createUser: (userData, callback) => {
     db.query('INSERT INTO USERS SET ?', userData, (err, results) => {
-        if (err) {
-            return callback(err, null);
-        }
-        return callback(null, results);
+      if (err) {
+        return callback(err, null);
+      }
+      return callback(null, results);
     });
-},
+  },
   updateUser: (id, userData, callback) => {
     db.query('UPDATE users SET ? WHERE id = ? AND deleted_at IS NULL', [userData, id], (err, results) => {
       if (err) {
