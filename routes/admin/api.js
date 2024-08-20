@@ -15,7 +15,7 @@ router.post('/logout', authController.logout);
 router.get('/exercises', verifyRole(['admin']), exercisesController.getAllExercises);
 router.get('/exercises/:id', verifyRole(['admin']), exercisesController.getExerciseById);
 router.post('/exercises/upsert/:id?', verifyRole(['admin']), uploadVideo.single('media_url'), exercisesController.upsertExercise);
-router.delete('/exercises/:id/delete', exercisesController.deleteExercise);
+router.delete('/exercises/:id/delete', verifyRole(['admin']), exercisesController.deleteExercise);
 
 // Expert routes
 router.get('/experts', verifyRole(['admin']), expertsController.getAllExperts);
