@@ -24,15 +24,15 @@ exports.signup = async (req, res) => {
     }
 
     if (!validator.isEmail(email)) {
-        return res.status(400).json({ error: 'Invalid email format' });
+        return res.status(401).json({ error: 'Invalid email format' });
     }
 
     if (!validator.isStrongPassword(password, { minLength: 8 })) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
+        return res.status(402).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const userData = { username, email, password: hash };
+    const userData = { username, email, password: hash, role: 2 };
 
     try {
         User.getUserByEmail(email, async (err, existingUser) => {
