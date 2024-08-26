@@ -54,7 +54,7 @@ router.get('/users', verifyRole(['user']), usersController.getAllUsers);
 router.get('/users/:id/detail', verifyRole(['user']), usersController.getUserById);
 router.post('/users/update', verifyToken, verifyRole(['user']), uploadAvatar.single('avatar'), usersController.updateUser);
 router.post('/users/:id/delete', verifyRole(['user']), usersController.deleteUser);
-router.post('/users/:id/pause', verifyRole(['user']), usersController.pauseUser);
+router.post('/users/:id/pause', verifyToken, verifyRole(['user']), usersController.pauseUser);
 
 // User-exercise routes
 router.get('/user-exercises', verifyToken, verifyRole(['user']), userExercisesController.getAllUserExercises);
