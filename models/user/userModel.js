@@ -12,12 +12,15 @@ const User = {
       return callback(null, results);
     });
   },
-  getUserById: (id, callback) => {
-    db.query('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [id], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
+  getUserById: (id) => {
+    return new Promise((resolve, reject) => {
+      const query = 'SELECT * FROM users WHERE id = ? AND deleted_at IS NULL';
+      db.query(query, [id], (err, results) => {
+        if (err) {
+          return reject(err); // Ném ra lỗi nếu có
+        }
+        resolve(results); // Trả về kết quả nếu thành công
+      });
     });
   },
   getUserByEmail: (email, callback) => {
@@ -46,12 +49,15 @@ const User = {
       return callback(null, results);
     });
   },
-  updateUser: (id, userData, callback) => {
-    db.query('UPDATE users SET ? WHERE id = ? AND deleted_at IS NULL', [userData, id], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
+  updateUser: (id, userData) => {
+    return new Promise((resolve, reject) => {
+      const query = 'UPDATE users SET ? WHERE id = ? AND deleted_at IS NULL';
+      db.query(query, [userData, id], (err, results) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(results);
+      });
     });
   },
   deleteUser: (id, callback) => {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const exercisesController = require('../../controllers/admin/exercisesController');
 const expertsController = require('../../controllers/admin/expertsController');
+const usersController = require('../../controllers/admin/usersController');
 const { verifyRole } = require('../../middleware/authMiddleware');
 const authController = require('../../controllers/admin/authController');
 const { uploadAvatar, uploadVideo, uploadImages } = require('../../config/multer');
@@ -22,5 +23,10 @@ router.get('/experts', verifyRole(['admin']), expertsController.getAllExperts);
 router.get('/experts/:id', verifyRole(['admin']), expertsController.getExpertById);
 router.post('/experts/upsert', verifyRole(['admin']), uploadAvatar.single('avatar'), expertsController.upsertExpert);
 router.delete('/experts/:id/delete', verifyRole(['admin']), expertsController.deleteExpert);
+
+// User routes
+router.get('/users', usersController.getAllUsers);
+router.get('/users/:id/detail', usersController.getUserById);
+router.post('/users/:id/delete',  usersController.deleteUser);
 
 module.exports = router;

@@ -8,7 +8,7 @@ const revokedTokens = [];
 
 // Generate Token
 const generateToken = (user) => {
-    return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: TOKEN_EXPIRATION });
+    return jwt.sign({ id: user.id, email: user.email, role: user.role }, SECRET_KEY, { expiresIn: TOKEN_EXPIRATION });
 };
 
 // Generate Refresh Token
@@ -86,7 +86,15 @@ exports.login = (req, res) => {
             const token = generateToken(user);
             const refreshToken = generateRefreshToken(user);
 
-            res.json({ token, refreshToken });
+            res.json({
+                msg: "success",
+                code: 200,
+                data: {
+                    user: user,
+                    token: token,
+                    refreshToken: refreshToken,
+                }
+            });
         });
     });
 };
