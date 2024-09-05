@@ -37,21 +37,30 @@ const uploadToFirebase = (file) => {
 // Lấy tất cả các diễn đàn
 exports.getAllForums = (req, res) => {
     const { page = 1, limit = 10, keyword = '' } = req.query;
-    Forum.getAllForums(page, limit, keyword, (err, results) => {
+    const offset = (page > 0 ? page - 1 : 0) * limit;
+
+    // Gọi model để lấy dữ liệu
+    Forum.getAllForums(keyword, limit, offset, (err, results) => {
         if (err) {
             return res.status(500).json({ error: err });
         }
+
+        // Gọi model để đếm tổng số bản ghi
         Forum.countAllForums(keyword, (err, countResults) => {
             if (err) {
                 return res.status(500).json({ error: err });
             }
+
             const total = countResults[0].total;
+            const totalPages = Math.ceil(total / limit);
+
             res.json({
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                totalPages: Math.ceil(total / limit),
-                forums: results
+                data: results,
+                total: total,
+                per_page: results.length,
+                current_page: parseInt(page),
+                last_page: totalPages,
+                has_more_pages: parseInt(page) < totalPages
             });
         });
     });

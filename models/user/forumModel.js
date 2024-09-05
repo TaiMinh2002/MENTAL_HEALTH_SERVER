@@ -1,10 +1,15 @@
 const db = require('../../config/db');
 
 const Forum = {
-    getAllForums: (page, limit, keyword, callback) => {
-        const offset = (page - 1) * limit;
-        const query = `SELECT * FROM forums WHERE deleted_at IS NULL AND title LIKE ? LIMIT ? OFFSET ?`;
-        const values = [`%${keyword}%`, parseInt(limit), offset];
+    getAllForums: (keyword, limit, offset, callback) => {
+        const query = `
+            SELECT forums.*, users.username AS created_user_name
+            FROM forums
+            JOIN users ON forums.created_user_id = users.id
+            WHERE forums.deleted_at IS NULL AND forums.title LIKE ?
+            LIMIT ? OFFSET ?`;
+
+        const values = [`%${keyword}%`, parseInt(limit), parseInt(offset)];
         db.query(query, values, callback);
     },
 
