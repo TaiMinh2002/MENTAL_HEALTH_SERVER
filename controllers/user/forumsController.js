@@ -38,15 +38,16 @@ const uploadToFirebase = (file) => {
 exports.getAllForums = (req, res) => {
     const { page = 1, limit = 10, keyword = '' } = req.query;
     const offset = (page > 0 ? page - 1 : 0) * limit;
+    const user_id = req.user.id; // Lấy user_id từ req.user (người dùng đã đăng nhập)
 
-    // Gọi model để lấy dữ liệu
-    Forum.getAllForums(keyword, limit, offset, (err, results) => {
+    // Lấy danh sách các diễn đàn mà user chưa tham gia
+    Forum.getAllForums(user_id, keyword, limit, offset, (err, results) => {
         if (err) {
             return res.status(500).json({ error: err });
         }
 
-        // Gọi model để đếm tổng số bản ghi
-        Forum.countAllForums(keyword, (err, countResults) => {
+        // Đếm tổng số diễn đàn
+        Forum.countAllForums(user_id, keyword, (err, countResults) => {
             if (err) {
                 return res.status(500).json({ error: err });
             }
@@ -187,35 +188,34 @@ exports.deleteForum = (req, res) => {
 
 // Tham gia diễn đàn
 exports.joinForum = (req, res) => {
-    const { forum_id } = req.body;
-    const user_id = req.user.id; // Assuming req.user contains the logged-in user's info
+    const { forum_id } = req.params;
+    const user_id = req.user.id;
+
     const joinData = {
         forum_id: forum_id,
         user_id: user_id,
         joined_at: new Date()
     };
 
-    Forum.joinForum(joinData, (err) => {
+    // Gọi hàm joinForum từ model
+    Forum.joinForum(joinData, (err, result) => {
         if (err) {
             console.error('Error adding user to forum_members:', err);
             return res.status(500).json({ error: 'Error adding user to forum_members' });
         }
 
-        // Increment member count
-        Forum.incrementMemberCount(forum_id, (err) => {
-            if (err) {
-                console.error('Error updating member count:', err);
-                return res.status(500).json({ error: 'Error updating member count' });
-            }
-            res.json({ message: 'User joined forum successfully' });
-        });
+        if (result && result.error) {
+            return res.status(404).json({ error: 'Forum not found' });
+        }
+
+        res.json({message: 'User joined forum successfully' });
     });
 };
 
 //Out diễn đàn
 exports.outForum = (req, res) => {
-    const { forum_id } = req.body;
-    const user_id = req.user.id; // Assuming req.user contains the logged-in user's info
+    const { forum_id } = req.params;
+    const user_id = req.user.id;
 
     Forum.outForum(forum_id, user_id, (err) => {
         if (err) {
@@ -223,13 +223,14 @@ exports.outForum = (req, res) => {
             return res.status(500).json({ error: 'Error updating forum_members' });
         }
 
-        // Decrement member count
+        // Giảm số lượng thành viên
         Forum.decrementMemberCount(forum_id, (err) => {
             if (err) {
                 console.error('Error updating member count:', err);
                 return res.status(500).json({ error: 'Error updating member count' });
             }
-            res.json({ message: 'User left forum successfully' });
+
+            res.json({message: 'User left forum successfully'});
         });
     });
 };

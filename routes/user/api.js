@@ -28,8 +28,8 @@ router.get('/forums', verifyToken, verifyRole([2]), forumsController.getAllForum
 router.get('/forums/:id', verifyToken, verifyRole([2]), forumsController.getForumById);
 router.post('/forums/upsert/:id?', verifyToken, verifyRole([2]), uploadAvatar.single('cover_image'), forumsController.upsertForum);
 router.delete('/forums/:id/delete', verifyToken, verifyRole([2]), forumsController.deleteForum);
-router.post('/forums/join', verifyToken, verifyRole([2]), forumsController.joinForum);
-router.post('/forums/leave', verifyToken, verifyRole([2]), forumsController.outForum);
+router.post('/forums/join/:forum_id', verifyToken, verifyRole([2]), forumsController.joinForum);
+router.post('/forums/leave/:forum_id', verifyToken, verifyRole([2]), forumsController.outForum);
 
 // Mood entries routes
 router.get('/mood-entries', verifyToken, verifyRole([2]), moodEntriesController.getAllMoodEntries);
