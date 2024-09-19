@@ -8,6 +8,7 @@ const postsController = require('../../controllers/user/postsController');
 const remindersController = require('../../controllers/user/remindersController');
 const userExercisesController = require('../../controllers/user/userExercisesController');
 const usersController = require('../../controllers/user/usersController');
+const chatController = require('../../controllers/user/chatController');
 const { verifyToken, verifyRole } = require('../../middleware/authMiddleware');
 const { uploadAvatar, uploadVideo, uploadImages } = require('../../config/multer');
 
@@ -51,7 +52,7 @@ router.delete('/reminders/:id/delete', verifyToken, verifyRole([2]), remindersCo
 
 // User routes
 router.get('/users', verifyRole([2]), usersController.getAllUsers);
-router.get('/users/:id/detail',verifyToken, verifyRole([2]), usersController.getUserById);
+router.get('/users/:id/detail', verifyToken, verifyRole([2]), usersController.getUserById);
 router.post('/users/:id/update', verifyToken, verifyRole([2]), uploadAvatar.single('avatar'), usersController.updateUser);
 router.post('/users/:id/delete', verifyRole([2]), usersController.deleteUser);
 router.post('/users/:id/pause', verifyToken, verifyRole([2]), usersController.pauseUser);
@@ -61,5 +62,9 @@ router.get('/user-exercises', verifyToken, verifyRole([2]), userExercisesControl
 router.get('/user-exercises/:id', verifyToken, verifyRole([2]), userExercisesController.getUserExerciseById);
 router.post('/user-exercises/upsert', verifyToken, verifyRole([2]), userExercisesController.upsertUserExercise);
 router.delete('/user-exercises/:id/delete', verifyToken, verifyRole([2]), userExercisesController.deleteUserExercise);
+
+// Chatbot routes
+router.post('/chatbot', verifyToken, chatController.sendMessage);
+router.get('/conversations', verifyToken, chatController.getConversations);
 
 module.exports = router;
