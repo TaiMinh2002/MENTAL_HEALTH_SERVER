@@ -4,9 +4,11 @@ const User = require('../../models/user/userModel');
 const validator = require('validator');
 const { SECRET_KEY, TOKEN_EXPIRATION, REFRESH_TOKEN_EXPIRATION } = process.env;
 
+const revokedTokens = [];
+
 // Generate Token
 const generateToken = (user) => {
-    return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: TOKEN_EXPIRATION });
+    return jwt.sign({ id: user.id, email: user.email, role: user.role }, SECRET_KEY, { expiresIn: TOKEN_EXPIRATION });
 };
 
 // Generate Refresh Token
@@ -14,7 +16,6 @@ const generateRefreshToken = (user) => {
     return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: REFRESH_TOKEN_EXPIRATION });
 };
 
-// Signup API
 exports.signup = async (req, res) => {
     const { username, email, password } = req.body;
 
@@ -30,7 +31,7 @@ exports.signup = async (req, res) => {
         return res.status(402).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
     }
 
-    const hash = await bcrypt.hash(password, 12); // Tăng số lần băm để bảo mật hơn
+    const hash = await bcrypt.hash(password, 10);
     const userData = { username, email, password: hash, role: 2 };
 
     try {
@@ -85,29 +86,29 @@ exports.login = (req, res) => {
             const token = generateToken(user);
             const refreshToken = generateRefreshToken(user);
 
-            // Lưu refreshToken vào cookie HTTP-only để bảo mật
-            res.cookie('refreshToken', refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production', // Chỉ dùng khi ở production
-                sameSite: 'Strict',  // Cookie chỉ gửi khi cùng domain
-                maxAge: REFRESH_TOKEN_EXPIRATION * 1000 // thời gian tồn tại của cookie
+            res.json({
+                msg: "success",
+                code: 200,
+                data: {
+                    user: user,
+                    token: token,
+                    refreshToken: refreshToken,
+                }
             });
-
-            res.json({ token });
         });
     });
 };
 
 // Refresh Token API
 exports.refreshToken = (req, res) => {
-    const refreshToken = req.cookies.refreshToken; // Lấy refreshToken từ cookie
+    const { refreshToken } = req.body;
 
     if (!refreshToken) {
         return res.status(400).json({ error: 'Refresh token is required' });
     }
 
     jwt.verify(refreshToken, SECRET_KEY, (err, user) => {
-        if (err) {
+        if (err || revokedTokens.includes(refreshToken)) {
             return res.status(401).json({ error: 'Invalid refresh token' });
         }
 
@@ -119,7 +120,7 @@ exports.refreshToken = (req, res) => {
 
 // Logout API
 exports.logout = (req, res) => {
-    const refreshToken = req.cookies.refreshToken; // Lấy refreshToken từ cookie
+    const { refreshToken } = req.body;
 
     if (!refreshToken) {
         return res.status(400).json({ error: 'Refresh token is required' });
@@ -130,19 +131,8 @@ exports.logout = (req, res) => {
             return res.status(401).json({ error: 'Invalid refresh token' });
         }
 
-        // Xóa refreshToken khỏi cơ sở dữ liệu (hoặc bạn có thể chỉ xóa cookie)
-        User.deleteRefreshToken(user.id, (err, result) => {
-            if (err) {
-                return res.status(500).json({ error: 'Failed to revoke refresh token' });
-            }
+        revokedTokens.push(refreshToken);
 
-            res.clearCookie('refreshToken', { // Xóa cookie lưu refreshToken
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'Strict'
-            });
-
-            res.json({ message: 'Logout successful' });
-        });
+        res.json({ message: 'Logout successful' });
     });
 };
