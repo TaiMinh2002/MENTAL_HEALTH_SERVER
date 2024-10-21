@@ -9,6 +9,7 @@ const remindersController = require('../../controllers/user/remindersController'
 const userExercisesController = require('../../controllers/user/userExercisesController');
 const usersController = require('../../controllers/user/usersController');
 const chatController = require('../../controllers/user/chatController');
+const exercisesController = require('../../controllers/user/exercisesController');
 const { verifyToken, verifyRole } = require('../../middleware/authMiddleware');
 const { uploadAvatar, uploadVideo, uploadImages } = require('../../config/multer');
 
@@ -23,6 +24,9 @@ router.get('/appointments', verifyToken, verifyRole([2]), appointmentsController
 router.get('/appointments/:id', verifyToken, appointmentsController.getAppointmentById);
 router.post('/appointments/upsert', verifyToken, appointmentsController.upsertAppointment);
 router.delete('/appointments/:id/delete', verifyToken, appointmentsController.deleteAppointment);
+
+//Exercise
+router.get('/exercises', verifyToken, verifyRole([2]), exercisesController.getAllExercises);
 
 // Forum routes
 router.get('/forums', verifyToken, verifyRole([2]), forumsController.getAllForums);
