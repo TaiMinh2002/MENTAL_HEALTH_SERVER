@@ -69,24 +69,20 @@ exports.getAllForums = (req, res) => {
 
 // Lấy chi tiết diễn đàn theo ID
 exports.getForumById = (req, res) => {
-    const { id } = req.params;
-    Forum.getForumById(id, (err, results) => {
+    const forumId = req.params.id;
+    Forum.getForumWithPosts(forumId, (err, forumData) => {
         if (err) {
-            return res.status(500).json({ error: err });
+            return res.status(500).json({ error: 'Failed to fetch forum with posts' });
         }
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Forum not found' });
-        }
-        const forum = results[0];
-        res.json(forum);
+
+        res.json(forumData);
     });
 };
 
-// Tạo mới hoặc cập nhật thông tin diễn đàn (upsert)
-exports.upsertForum = async (req, res) => {
-    const { id } = req.params;
+// Tạo mới diễn đàn (upsert)
+exports.createForum = async (req, res) => {
     const { title, description } = req.body;
-    const created_user_id = req.user.id; // ID của người dùng đang đăng nhập
+    const created_user_id = req.user.id; // ID of the logged-in user
     let cover_image = null;
 
     if (req.file) {
@@ -99,61 +95,71 @@ exports.upsertForum = async (req, res) => {
 
     const forumData = { title, description, cover_image, created_user_id };
 
-    if (id) {
-        // Update forum
-        Forum.getForumById(id, (err, results) => {
+    Forum.createForum(forumData, (err, insertResults) => {
+        if (err) {
+            return res.status(500).json({ error: err });
+        }
+
+        const newForumId = insertResults.insertId;
+        const joinData = {
+            forum_id: newForumId,
+            user_id: created_user_id,
+            joined_at: new Date()
+        };
+
+        // Add creator to forum_members
+        Forum.joinForum(joinData, (err) => {
             if (err) {
-                return res.status(500).json({ error: err });
+                return res.status(500).json({ error: 'Error adding user to forum_members' });
             }
 
-            if (results.length === 0) {
-                return res.status(404).json({ error: 'Forum not found' });
-            }
-
-            const forum = results[0];
-
-            // Kiểm tra nếu người dùng đang đăng nhập là người tạo forum
-            if (forum.created_user_id !== created_user_id) {
-                return res.status(403).json({ error: 'You do not have permission to update this forum' });
-            }
-
-            Forum.updateForum(id, forumData, (err) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
-                res.json({ message: 'Forum updated successfully' });
-            });
+            res.json({ message: 'Forum created successfully', id: newForumId });
         });
-    } else {
-        // Create new forum
-        Forum.createForum(forumData, (err, insertResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
+    });
+};
 
-            const newForumId = insertResults.insertId;
-            const joinData = {
-                forum_id: newForumId,
-                user_id: created_user_id,
-                joined_at: new Date()
-            };
+// Update forum details
+exports.updateForum = async (req, res) => {
+    const { id } = req.params; // Forum ID to update
+    const { title, description } = req.body;
+    const created_user_id = req.user.id; // ID of the logged-in user
+    let cover_image = null;
 
-            // Add creator to forum_members
-            Forum.joinForum(joinData, (err) => {
-                if (err) {
-                    return res.status(500).json({ error: 'Error adding user to forum_members' });
-                }
-
-                // Increment member count
-                Forum.incrementMemberCount(newForumId, (err) => {
-                    if (err) {
-                        return res.status(500).json({ error: 'Error updating member count' });
-                    }
-                    res.json({ message: 'Forum created successfully', id: newForumId });
-                });
-            });
-        });
+    if (req.file) {
+        try {
+            cover_image = await uploadToFirebase(req.file);
+        } catch (err) {
+            return res.status(500).json({ error: 'Error uploading file to Firebase' });
+        }
     }
+
+    const forumData = { title, description, cover_image };
+
+    // Get current forum details to check ownership
+    Forum.getForumById(id, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Forum not found' });
+        }
+
+        const forum = results[0];
+
+        // Check if the logged-in user is the creator of the forum
+        if (forum.created_user_id !== created_user_id) {
+            return res.status(403).json({ error: 'You do not have permission to update this forum' });
+        }
+
+        // Update forum details
+        Forum.updateForum(id, forumData, (err) => {
+            if (err) {
+                return res.status(500).json({ error: err });
+            }
+            res.json({ message: 'Forum updated successfully' });
+        });
+    });
 };
 
 // Xóa diễn đàn theo ID
@@ -208,7 +214,7 @@ exports.joinForum = (req, res) => {
             return res.status(404).json({ error: 'Forum not found' });
         }
 
-        res.json({message: 'User joined forum successfully' });
+        res.json({ message: 'User joined forum successfully' });
     });
 };
 
@@ -230,7 +236,7 @@ exports.outForum = (req, res) => {
                 return res.status(500).json({ error: 'Error updating member count' });
             }
 
-            res.json({message: 'User left forum successfully'});
+            res.json({ message: 'User left forum successfully' });
         });
     });
 };

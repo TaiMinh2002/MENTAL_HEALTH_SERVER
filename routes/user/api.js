@@ -26,8 +26,9 @@ router.delete('/appointments/:id/delete', verifyToken, appointmentsController.de
 
 // Forum routes
 router.get('/forums', verifyToken, verifyRole([2]), forumsController.getAllForums);
-router.get('/forums/:id', verifyToken, verifyRole([2]), forumsController.getForumById);
-router.post('/forums/upsert/:id?', verifyToken, verifyRole([2]), uploadAvatar.single('cover_image'), forumsController.upsertForum);
+router.get('/forums/:id/detail', verifyToken, verifyRole([2]), forumsController.getForumById);
+router.post('/forums/create', verifyToken, verifyRole([2]), uploadAvatar.single('cover_image'), forumsController.createForum);
+router.post('/forums/update/:id', verifyToken, verifyRole([2]), uploadAvatar.single('cover_image'), forumsController.updateForum);
 router.delete('/forums/:id/delete', verifyToken, verifyRole([2]), forumsController.deleteForum);
 router.post('/forums/join/:forum_id', verifyToken, verifyRole([2]), forumsController.joinForum);
 router.post('/forums/leave/:forum_id', verifyToken, verifyRole([2]), forumsController.outForum);
