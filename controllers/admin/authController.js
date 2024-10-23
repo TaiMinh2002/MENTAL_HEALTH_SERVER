@@ -1,22 +1,6 @@
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../../models/user/userModel');
-const validator = require('validator');
-const { SECRET_KEY, TOKEN_EXPIRATION, REFRESH_TOKEN_EXPIRATION } = process.env;
 
-const revokedTokens = [];
-
-// Generate Token
-const generateToken = (user) => {
-    return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: TOKEN_EXPIRATION });
-};
-
-// Generate Refresh Token
-const generateRefreshToken = (user) => {
-    return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: REFRESH_TOKEN_EXPIRATION });
-};
-
-// Login API
 exports.login = (req, res) => {
     const { email, password } = req.body;
 
@@ -41,48 +25,12 @@ exports.login = (req, res) => {
                 return res.status(401).json({ error: 'Incorrect password' });
             }
 
-            const token = generateToken(user);
-            const refreshToken = generateRefreshToken(user);
-
-            res.json({ token, refreshToken });
+            res.json({ message: 'Login successful', user });
         });
-    });
-};
-
-// Refresh Token API
-exports.refreshToken = (req, res) => {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-        return res.status(400).json({ error: 'Refresh token is required' });
-    }
-
-    jwt.verify(refreshToken, SECRET_KEY, (err, user) => {
-        if (err || revokedTokens.includes(refreshToken)) {
-            return res.status(401).json({ error: 'Invalid refresh token' });
-        }
-
-        const newToken = generateToken(user);
-
-        res.json({ token: newToken });
     });
 };
 
 // Logout API
 exports.logout = (req, res) => {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-        return res.status(400).json({ error: 'Refresh token is required' });
-    }
-
-    jwt.verify(refreshToken, SECRET_KEY, (err, user) => {
-        if (err) {
-            return res.status(401).json({ error: 'Invalid refresh token' });
-        }
-
-        revokedTokens.push(refreshToken);
-
-        res.json({ message: 'Logout successful' });
-    });
+    res.json({ message: 'Logout successful' });
 };

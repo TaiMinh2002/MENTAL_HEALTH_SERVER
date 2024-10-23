@@ -13,20 +13,15 @@ router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authController.logout);
 
 // Exercise routes
-router.get('/exercises', verifyRole(['admin']), exercisesController.getAllExercises);
-router.get('/exercises/:id', verifyRole(['admin']), exercisesController.getExerciseById);
-router.post('/exercises/upsert/:id?', verifyRole(['admin']), uploadVideo.single('media_url'), exercisesController.upsertExercise);
-router.delete('/exercises/:id/delete', verifyRole(['admin']), exercisesController.deleteExercise);
+router.get('/exercises', verifyRole([1]), exercisesController.getAllExercises);
+router.get('/exercises/:id/detail', verifyRole([1]), exercisesController.getExerciseById);
+router.post('/exercises/upsert/:id?', verifyRole([1]), uploadVideo.single('media_url'), exercisesController.upsertExercise);
+router.delete('/exercises/:id/delete', verifyRole([1]), exercisesController.deleteExercise);
 
 // Expert routes
-router.get('/experts', verifyRole(['admin']), expertsController.getAllExperts);
-router.get('/experts/:id', verifyRole(['admin']), expertsController.getExpertById);
-router.post('/experts/upsert', verifyRole(['admin']), uploadAvatar.single('avatar'), expertsController.upsertExpert);
-router.delete('/experts/:id/delete', verifyRole(['admin']), expertsController.deleteExpert);
-
-// User routes
-router.get('/users', usersController.getAllUsers);
-router.get('/users/:id/detail', usersController.getUserById);
-router.post('/users/:id/delete',  usersController.deleteUser);
+router.get('/experts', verifyRole([1]), expertsController.getAllExperts);
+router.get('/experts/:id/detail', verifyRole([1]), expertsController.getExpertById);
+router.post('/experts/upsert/:id?', verifyRole([1]), uploadAvatar.single('avatar'), expertsController.upsertExpert);
+router.delete('/experts/:id/delete', verifyRole([1]), expertsController.deleteExpert);
 
 module.exports = router;
