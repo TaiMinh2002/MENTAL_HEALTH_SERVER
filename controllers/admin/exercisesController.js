@@ -5,9 +5,9 @@ const bucket = require('../../firebase'); // Import Firebase Storage bucket
 const typeToString = (type) => {
     switch (type) {
         case 1:
-            return 'Thiền';
+            return 'Meditation';
         case 2:
-            return 'Thở sâu';
+            return 'Deep Breathing';
         case 3:
             return 'Yoga';
         default:
@@ -46,7 +46,9 @@ const uploadToFirebase = (file) => {
 
 // Lấy tất cả bài tập với phân trang và tìm kiếm theo title
 exports.getAllExercises = (req, res) => {
-    const { page = 1, limit = 10, keyword = '' } = req.query;
+    let { page = 1, limit, keyword = '' } = req.query;
+    limit = limit ? parseInt(limit) : 10; // Chỉ mặc định là 10 nếu không truyền limit vào params
+
     Exercise.getAllExercises(page, limit, keyword, (err, results) => {
         if (err) {
             return res.status(500).json({ error: err });
@@ -58,7 +60,7 @@ exports.getAllExercises = (req, res) => {
             res.json({
                 total: countResults[0].total,
                 page: parseInt(page),
-                limit: parseInt(limit),
+                limit,
                 exercises: results.map(exercise => ({
                     ...exercise,
                     type_string: typeToString(exercise.type),
@@ -87,12 +89,11 @@ exports.getExerciseById = (req, res) => {
     });
 };
 
-// Tạo mới hoặc cập nhật thông tin bài tập (upsert)
-exports.upsertExercise = async (req, res) => {
-    const { id } = req.params;
+exports.createExercise = async (req, res) => {
     const { title, description, type } = req.body;
     let media_url = null;
 
+    // Kiểm tra nếu có tệp media
     if (req.file) {
         try {
             media_url = await uploadToFirebase(req.file);
@@ -101,51 +102,78 @@ exports.upsertExercise = async (req, res) => {
         }
     }
 
-    if (!title) {
-        return res.status(400).json({ error: 'Title is required' });
-    }
-    if (!description) {
-        return res.status(400).json({ error: 'Description is required' });
-    }
-    if (!type) {
-        return res.status(400).json({ error: 'Type is required' });
-    }
-    if (!media_url && !id) {
-        return res.status(400).json({ error: 'Media URL is required' });
+    // Kiểm tra các trường bắt buộc
+    const errors = {};
+    if (!title) errors.title = 'Title is required';
+    if (!description) errors.description = 'Description is required';
+    if (!type) errors.type = 'Type is required';
+    if (!media_url) errors.media_url = 'Media URL is required';
+
+    if (Object.keys(errors).length > 0) {
+        return res.status(400).json({ errors });
     }
 
-    if (id) {
-        // Update exercise
-        const exerciseData = { title, description, type };
-        if (media_url) {
-            exerciseData.media_url = media_url;
+    const exerciseData = { title, description, type, media_url };
+
+    // Kiểm tra tiêu đề bài tập đã tồn tại
+    Exercise.checkExerciseTitleExists(title, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err });
+        }
+        if (results.length > 0) {
+            return res.status(400).json({ error: 'Exercise title already exists' });
         }
 
+        // Tạo mới bài tập
+        Exercise.createExercise(exerciseData, (err, insertResults) => {
+            if (err) {
+                return res.status(500).json({ error: err });
+            }
+            res.json({ id: insertResults.insertId, media_url: exerciseData.media_url });
+        });
+    });
+};
+
+exports.updateExercise = async (req, res) => {
+    const { id } = req.params;
+    const { title, description, type } = req.body;
+    let media_url = null;
+
+    // Kiểm tra nếu có tệp media
+    if (req.file) {
+        try {
+            media_url = await uploadToFirebase(req.file);
+        } catch (error) {
+            return res.status(500).json({ error: 'Error uploading file to Firebase' });
+        }
+    }
+
+    const exerciseData = {};
+    if (title) exerciseData.title = title;
+    if (description) exerciseData.description = description;
+    if (type) exerciseData.type = type;
+    if (media_url) exerciseData.media_url = media_url;
+
+    // Kiểm tra nếu bài tập tồn tại
+    Exercise.getExerciseById(id, (err, exerciseResults) => {
+        if (err) {
+            return res.status(500).json({ error: err });
+        }
+        if (exerciseResults.length === 0) {
+            return res.status(404).json({ error: 'Exercise not found' });
+        }
+
+        // Cập nhật bài tập
         Exercise.updateExercise(id, exerciseData, (err, updateResults) => {
             if (err) {
                 return res.status(500).json({ error: err });
             }
-            res.json({ message: 'Exercise updated successfully', media_url: exerciseData.media_url });
-        });
-    } else {
-        // Create new exercise
-        const exerciseData = { title, description, type, media_url };
-
-        Exercise.checkExerciseTitleExists(title, (err, results) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            if (results.length > 0) {
-                return res.status(400).json({ error: 'Exercise title already exists' });
-            }
-            Exercise.createExercise(exerciseData, (err, insertResults) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
-                res.json({ id: insertResults.insertId, media_url: exerciseData.media_url });
+            res.json({
+                message: 'Exercise updated successfully',
+                media_url: exerciseData.media_url
             });
         });
-    }
+    });
 };
 
 // Xóa bài tập theo ID (mark as deleted)

@@ -85,6 +85,15 @@ const User = {
       }
       return callback(null, results);
     });
+  },
+  updateUserByExpertId: (expertId, userData, callback) => {
+    const query = 'UPDATE users SET ? WHERE expert_id = ? AND deleted_at IS NULL';
+    db.query(query, [userData, expertId], (err, results) => {
+      if (err) {
+        return callback(err, null);
+      }
+      return callback(null, results);
+    });
   }
 };
 
