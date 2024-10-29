@@ -17,34 +17,44 @@ const generateRefreshToken = (user) => {
 };
 
 exports.signup = async (req, res) => {
-    const { username, email, password } = req.body;
+    const { identifier, username, password } = req.body;
 
-    if (!username || !email || !password) {
-        return res.status(400).json({ error: 'Username, email, and password are required' });
+    if (!identifier || !username || !password) {
+        return res.status(400).json({ error: 'Username, identifier, and password are required' });
     }
 
-    if (!validator.isEmail(email)) {
-        return res.status(401).json({ error: 'Invalid email format' });
+    // Xác định loại của identifier (email hoặc phone_number)
+    let userData = { username, role: 2 };
+    if (validator.isEmail(identifier)) {
+        userData.email = identifier;
+    } else if (validator.isMobilePhone(identifier, 'vi-VN')) {
+        userData.phone_number = identifier;
+    } else {
+        return res.status(400).json({ error: 'Identifier must be a valid email or phone number' });
     }
 
+    // Kiểm tra độ mạnh của mật khẩu
     if (!validator.isStrongPassword(password, { minLength: 8 })) {
         return res.status(402).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
     }
 
-    const hash = await bcrypt.hash(password, 10);
-    const userData = { username, email, password: hash, role: 2 };
+    // Mã hóa mật khẩu
+    userData.password = await bcrypt.hash(password, 10);
 
     try {
-        User.getUserByEmail(email, async (err, existingUser) => {
+        // Kiểm tra nếu email hoặc số điện thoại đã tồn tại
+        User.getUserByEmailOrPhoneNumber(identifier, async (err, existingUser) => {
             if (err) {
                 console.error('Database error:', err);
                 return res.status(500).json({ error: 'Internal server error' });
             }
 
             if (existingUser.length > 0) {
-                return res.status(400).json({ error: 'Email already exists' });
+                const errorMsg = userData.email ? 'Email already exists' : 'Phone number already exists';
+                return res.status(400).json({ error: errorMsg });
             }
 
+            // Tạo người dùng mới
             User.createUser(userData, (err, result) => {
                 if (err) {
                     console.error('Failed to create user:', err);
@@ -58,11 +68,10 @@ exports.signup = async (req, res) => {
     }
 };
 
-// Login API
 exports.login = (req, res) => {
-    const { email, password } = req.body;
+    const { identifier, password } = req.body;
 
-    User.getUserByEmail(email, (err, results) => {
+    User.getUserByEmailOrPhoneNumber(identifier, (err, results) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ error: 'Internal server error' });
@@ -83,6 +92,7 @@ exports.login = (req, res) => {
                 return res.status(401).json({ error: 'Incorrect password' });
             }
 
+            // Tạo token và refresh token
             const token = generateToken(user);
             const refreshToken = generateRefreshToken(user);
 
@@ -90,9 +100,9 @@ exports.login = (req, res) => {
                 msg: "success",
                 code: 200,
                 data: {
-                    user: user,
-                    token: token,
-                    refreshToken: refreshToken,
+                    user,
+                    token,
+                    refreshToken
                 }
             });
         });

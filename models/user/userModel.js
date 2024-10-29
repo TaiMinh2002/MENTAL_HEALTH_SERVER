@@ -23,13 +23,17 @@ const User = {
       });
     });
   },
-  getUserByEmail: (email, callback) => {
-    db.query('SELECT * FROM USERS WHERE email = ? AND deleted_at IS NULL', [email], (err, results) => {
-      if (err) {
-        return callback(err, null);
+  getUserByEmailOrPhoneNumber: (identifier, callback) => {
+    db.query(
+      'SELECT * FROM USERS WHERE (email = ? OR phone_number = ?) AND deleted_at IS NULL',
+      [identifier, identifier],
+      (err, results) => {
+        if (err) {
+          return callback(err, null);
+        }
+        return callback(null, results);
       }
-      return callback(null, results);
-    });
+    );
   },
   countAllUsers: (keyword, callback) => {
     const query = `SELECT COUNT(*) AS total FROM users WHERE deleted_at IS NULL AND username LIKE ?`;

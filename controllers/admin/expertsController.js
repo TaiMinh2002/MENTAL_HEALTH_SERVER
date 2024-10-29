@@ -159,14 +159,13 @@ exports.createExpert = async (req, res) => {
                     return res.status(500).json({ error: err });
                 }
 
-                // Sau khi tạo chuyên gia thành công, tạo tài khoản user tương ứng
-                const email = `${phone_number}@gmail.com`;
+                // Tạo tài khoản user tương ứng
                 const password = await bcrypt.hash('Mental@2024', 10);
                 const username = name;
                 const userData = {
                     expert_id: insertResults.insertId,
                     avatar,
-                    email,
+                    phone_number,  // Lưu phone_number vào bảng users
                     username,
                     password,
                     role: 3,
@@ -232,8 +231,7 @@ exports.updateExpert = async (req, res) => {
                 // Cập nhật thông tin trong bảng users nếu có thay đổi phone_number hoặc avatar
                 const userData = {};
                 if (phone_number) {
-                    const email = `${phone_number}@gmail.com`;
-                    userData.email = email;  // Cập nhật email khi có thay đổi phone_number
+                    userData.phone_number = phone_number;  // Cập nhật phone_number
                 }
                 if (avatar) {
                     userData.avatar = avatar;  // Cập nhật avatar khi có thay đổi avatar
@@ -246,13 +244,13 @@ exports.updateExpert = async (req, res) => {
                         }
                         res.json({
                             message: 'Expert and user updated successfully',
-                            avatar: expertData.avatar ? getBaseUrl(req) + expertData.avatar : null
+                            avatar: expertData.avatar ? getBaseUrl(req) + expertData.avatar : null,
                         });
                     });
                 } else {
                     res.json({
                         message: 'Expert updated successfully',
-                        avatar: expertData.avatar ? getBaseUrl(req) + expertData.avatar : null
+                        avatar: expertData.avatar ? getBaseUrl(req) + expertData.avatar : null,
                     });
                 }
             });

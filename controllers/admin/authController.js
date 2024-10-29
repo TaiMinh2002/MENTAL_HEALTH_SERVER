@@ -4,7 +4,7 @@ const User = require('../../models/user/userModel');
 exports.login = (req, res) => {
     const { email, password } = req.body;
 
-    User.getUserByEmail(email, (err, results) => {
+    User.getUserByEmailOrPhoneNumber(email, (err, results) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ error: 'Internal server error' });
