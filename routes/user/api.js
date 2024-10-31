@@ -68,8 +68,10 @@ router.get('/user-exercises/:id', verifyToken, verifyRole([2]), userExercisesCon
 router.post('/user-exercises/upsert', verifyToken, verifyRole([2]), userExercisesController.upsertUserExercise);
 router.delete('/user-exercises/:id/delete', verifyToken, verifyRole([2]), userExercisesController.deleteUserExercise);
 
-// Chatbot routes
-router.post('/chatbot', verifyToken, chatController.sendMessage);
-router.get('/conversations', verifyToken, chatController.getConversations);
+// Chat routes
+router.post('/chat_expert', verifyToken, verifyRole([2, 3]), chatController.sendMessage);
+router.get('/conversations', verifyToken, verifyRole([2, 3]), chatController.getConversations);
+router.post('/conversations/create', verifyToken, verifyRole([2]), chatController.createConversation);
+router.get('/messages/:conversationId', verifyToken, verifyRole([2, 3]), chatController.getMessages);
 
 module.exports = router;

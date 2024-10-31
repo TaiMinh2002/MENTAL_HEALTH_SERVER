@@ -21,6 +21,10 @@ const verifyToken = (req, res, next) => {
 // Middleware để kiểm tra vai trò
 const verifyRole = (roles) => {
     return (req, res, next) => {
+        if (!req.user || !req.user.role) {
+            return res.status(403).send('User role not found');
+        }
+
         console.log('User Role:', req.user.role); // Log vai trò người dùng
         if (!roles.includes(req.user.role)) {
             return res.status(403).send('You do not have the required role to access this resource');

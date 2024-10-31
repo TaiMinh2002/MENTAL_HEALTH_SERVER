@@ -1,58 +1,72 @@
-const axios = require('axios');
-const chatModel = require('../../models/user/chatModel');
+const Conversation = require('../../models/user/conversationModel');
+const Message = require('../../models/user/messageModel');
 
-// Gửi tin nhắn tới GPT API và lưu phản hồi vào DB
-const sendMessage = async (req, res) => {
-    const userId = req.user.id;  // Lấy user_id từ token đã được giải mã qua middleware auth
-    const userMessage = req.body.message;
+exports.createConversation = (req, res) => {
+    const user1_id = req.user.id; // Lấy ID người dùng đang đăng nhập từ token
+    const { user2_id } = req.body;
 
-    if (!userMessage) {
-        return res.status(400).json({ error: 'Message is required' });
-    }
-
-    try {
-        // Gọi OpenAI GPT API để lấy phản hồi từ chatbot
-        const response = await axios.post('https://api.openai.com/v1/completions', {
-            model: 'text-davinci-003',
-            prompt: userMessage,
-            max_tokens: 150,
-            temperature: 0.7
-        }, {
-            headers: {
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,  // Lấy API key từ file .env
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const botReply = response.data.choices[0].text.trim();
-
-        // Lưu cuộc hội thoại vào cơ sở dữ liệu
-        chatModel.saveConversation(userId, userMessage, botReply, (err, result) => {
-            if (err) {
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json({ reply: botReply });
-        });
-
-    } catch (error) {
-        console.error('Error with GPT API:', error);
-        res.status(500).json({ error: 'Failed to communicate with the chatbot.' });
-    }
-};
-
-// Lấy lịch sử cuộc hội thoại của người dùng
-const getConversations = (req, res) => {
-    const userId = req.user.id;  // Lấy user_id từ token đã được giải mã qua middleware auth
-
-    chatModel.getConversations(userId, (err, results) => {
+    Conversation.create(user1_id, user2_id, (err, results) => {
         if (err) {
-            return res.status(500).json({ error: 'Database error' });
+            console.error("Database error:", err);
+            return res.status(500).json({ error: "Internal server error" });
         }
-        res.json(results);
+        res.json({ message: "Conversation created successfully", conversationId: results.insertId });
     });
 };
 
-module.exports = {
-    sendMessage,
-    getConversations
+exports.getConversations = (req, res) => {
+    const userId = req.user.id;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page > 0 ? page - 1 : 0) * limit;
+
+    Conversation.getByUserIdWithPagination(userId, limit, offset, (err, results) => {
+        if (err) {
+            console.error("Database error:", err);
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        // Đếm tổng số cuộc trò chuyện
+        Conversation.countByUserId(userId, (err, countResults) => {
+            if (err) {
+                return res.status(500).json({ error: "Internal server error" });
+            }
+
+            const total = countResults[0].total;
+            const totalPages = Math.ceil(total / limit);
+
+            res.json({
+                data: results,
+                total: total,
+                per_page: results.length,
+                current_page: parseInt(page),
+                last_page: totalPages,
+                has_more_pages: parseInt(page) < totalPages
+            });
+        });
+    });
+};
+
+exports.sendMessage = (req, res) => {
+    const { conversation_id, message } = req.body;
+    const sender_id = req.user.id; // Lấy ID người dùng từ token đã xác thực
+
+    Message.create(conversation_id, sender_id, message, (err, results) => {
+        if (err) {
+            console.error("Database error:", err);
+            return res.status(500).json({ error: "Internal server error" });
+        }
+        res.json({ message: "Message sent successfully", messageId: results.insertId });
+    });
+};
+
+exports.getMessages = (req, res) => {
+    const { conversationId } = req.params;
+
+    Message.getByConversationId(conversationId, (err, results) => {
+        if (err) {
+            console.error("Database error:", err);
+            return res.status(500).json({ error: "Internal server error" });
+        }
+        res.json(results);
+    });
 };
