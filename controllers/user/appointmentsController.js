@@ -1,6 +1,5 @@
 const Appointment = require('../../models/user/appointmentModel');
 
-// Lấy tất cả các cuộc hẹn
 exports.getAllAppointments = (req, res) => {
     Appointment.getAllAppointments((err, results) => {
         if (err) {
@@ -10,7 +9,6 @@ exports.getAllAppointments = (req, res) => {
     });
 };
 
-// Lấy chi tiết cuộc hẹn theo ID
 exports.getAppointmentById = (req, res) => {
     const { id } = req.params;
     Appointment.getAppointmentById(id, (err, results) => {
@@ -24,7 +22,6 @@ exports.getAppointmentById = (req, res) => {
     });
 };
 
-// Tạo mới hoặc cập nhật thông tin cuộc hẹn (upsert)
 exports.upsertAppointment = (req, res) => {
     const { id } = req.params;
     const { user_id, expert_id, appointment_time, status } = req.body;
@@ -55,7 +52,6 @@ exports.upsertAppointment = (req, res) => {
     }
 };
 
-// Xóa cuộc hẹn theo ID
 exports.deleteAppointment = (req, res) => {
     const { id } = req.params;
     Appointment.deleteAppointment(id, (err, results) => {

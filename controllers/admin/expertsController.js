@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const validator = require('validator');
 const Expert = require('../../models/admin/expertModel');
 const User = require('../../models/user/userModel');
-const bucket = require('../../firebase'); // Import Firebase Storage bucket
+const { UploadClient } = require('@uploadcare/upload-client');
 require('dotenv').config();
 
 const getBaseUrl = (req) => {
@@ -29,36 +29,20 @@ const getSpecializationString = (specialization) => {
     }
 };
 
-// Tải ảnh lên Firebase Storage
-const uploadToFirebase = (file) => {
-    return new Promise((resolve, reject) => {
-        const { originalname, buffer } = file;
-        const blob = bucket.file(originalname);
-        const blobStream = blob.createWriteStream({
-            metadata: {
-                contentType: file.mimetype
-            }
+const uploadToUploadcare = async (file) => {
+    try {
+        const client = new UploadClient({ publicKey: process.env.UPLOADCARE_PUBLIC_KEY });
+        const response = await client.uploadFile(file.buffer, {
+            fileName: file.originalname,
+            contentType: file.mimetype,
         });
-
-        blobStream.on('error', (err) => {
-            reject(err);
-        });
-
-        blobStream.on('finish', async () => {
-            try {
-                await blob.makePublic(); // Làm cho ảnh công khai
-                const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-                resolve(publicUrl);
-            } catch (error) {
-                reject(error);
-            }
-        });
-
-        blobStream.end(buffer);
-    });
+        return response.cdnUrl;
+    } catch (error) {
+        console.error('Error uploading to Uploadcare:', error.message);
+        throw new Error('Error uploading file to Uploadcare');
+    }
 };
 
-// Lấy tất cả chuyên gia với phân trang và tìm kiếm
 exports.getAllExperts = (req, res) => {
     let { page = 1, limit, keyword = '' } = req.query;
     limit = limit ? parseInt(limit) : 10;
@@ -70,27 +54,23 @@ exports.getAllExperts = (req, res) => {
 
         const expertsWithSpecializationString = results.map((expert) => ({
             ...expert,
-            specialization_string: getSpecializationString(expert.specialization),
+            avatar: expert.avatar || null,
         }));
 
         Expert.countAllExperts(keyword, (err, countResults) => {
             if (err) {
                 return res.status(500).json({ error: err });
             }
-            const total = countResults[0].total;
-
             res.json({
                 page: parseInt(page),
                 limit,
-                total,
-                total_page: Math.ceil(total / limit),
+                total: countResults[0].total,
                 experts: expertsWithSpecializationString,
             });
         });
     });
 };
 
-// Lấy chi tiết chuyên gia theo ID
 exports.getExpertById = (req, res) => {
     const { id } = req.params;
     Expert.getExpertById(id, (err, results) => {
@@ -100,27 +80,24 @@ exports.getExpertById = (req, res) => {
         if (results.length === 0) {
             return res.status(404).json({ error: 'Expert not found' });
         }
-
-        const expert = results[0];
-        res.json(expert);
+        res.json(results[0]);
     });
 };
 
-// Tạo mới chuyên gia
 exports.createExpert = async (req, res) => {
     const { name, specialization, bio, contact_info, phone_number } = req.body;
     let avatar = null;
 
-    // Kiểm tra nếu có tệp ảnh avatar
-    if (req.file) {
+    // Xử lý upload avatar
+    if (req.files && req.files.avatar) {
         try {
-            avatar = await uploadToFirebase(req.file);
+            avatar = await uploadToUploadcare(req.files.avatar[0]);
         } catch (error) {
-            return res.status(500).json({ error: 'Error uploading file to Firebase' });
+            return res.status(500).json({ error: 'Error uploading avatar to Uploadcare' });
         }
     }
 
-    // Kiểm tra các trường bắt buộc
+    // Kiểm tra dữ liệu đầu vào
     const errors = {};
     if (!name) errors.name = 'Name is required';
     if (!specialization) errors.specialization = 'Specialization is required';
@@ -132,50 +109,29 @@ exports.createExpert = async (req, res) => {
         return res.status(400).json({ errors });
     }
 
-    // Chuyển đổi specialization thành số nếu nó là chuỗi
-    const expertData = {
-        name,
-        specialization: parseInt(specialization, 10),
-        bio,
-        contact_info,
-        phone_number,
-    };
-
-    if (avatar) expertData.avatar = avatar;
+    const expertData = { name, specialization, bio, contact_info, phone_number, avatar };
 
     try {
-        // Kiểm tra số điện thoại đã tồn tại
-        Expert.checkPhoneNumberExists(phone_number, async (err, results) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            if (results.length > 0) {
-                return res.status(400).json({ error: 'Phone number already exists' });
-            }
+        Expert.checkPhoneNumberExists(phone_number, (err, results) => {
+            if (err) return res.status(500).json({ error: err });
+            if (results.length > 0) return res.status(400).json({ error: 'Phone number already exists' });
 
-            // Tạo mới chuyên gia
             Expert.createExpert(expertData, async (err, insertResults) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
+                if (err) return res.status(500).json({ error: err });
 
-                // Tạo tài khoản user tương ứng
                 const password = await bcrypt.hash('Mental@2024', 10);
-                const username = name;
                 const userData = {
                     expert_id: insertResults.insertId,
                     avatar,
-                    phone_number,  // Lưu phone_number vào bảng users
-                    username,
+                    phone_number,
+                    username: name,
                     password,
                     role: 3,
                     email_verified_at: new Date(),
                 };
 
                 User.createUser(userData, (err, userResult) => {
-                    if (err) {
-                        return res.status(500).json({ error: 'Failed to create user for expert' });
-                    }
+                    if (err) return res.status(500).json({ error: 'Failed to create user for expert' });
                     res.json({
                         expertId: insertResults.insertId,
                         userId: userResult.insertId,
@@ -185,95 +141,49 @@ exports.createExpert = async (req, res) => {
             });
         });
     } catch (error) {
-        return res.status(500).json({ error: 'Failed to create expert and user' });
+        res.status(500).json({ error: error.message });
     }
 };
 
-// Cập nhật thông tin chuyên gia
 exports.updateExpert = async (req, res) => {
     const { id } = req.params;
     const { name, specialization, bio, contact_info, phone_number } = req.body;
     let avatar = null;
 
-    // Kiểm tra nếu có tệp ảnh avatar
-    if (req.file) {
+    // Xử lý upload avatar
+    if (req.files && req.files.avatar) {
         try {
-            avatar = await uploadToFirebase(req.file);
+            avatar = await uploadToUploadcare(req.files.avatar[0]);
         } catch (error) {
-            return res.status(500).json({ error: 'Error uploading file to Firebase' });
+            return res.status(500).json({ error: 'Error uploading avatar to Uploadcare' });
         }
     }
 
-    const expertData = {};
-    if (name) expertData.name = name;
-    if (specialization) expertData.specialization = specialization;
-    if (bio) expertData.bio = bio;
-    if (contact_info) expertData.contact_info = contact_info;
-    if (phone_number) expertData.phone_number = phone_number;
-    if (avatar) expertData.avatar = avatar;
+    const expertData = { name, specialization, bio, contact_info, phone_number, avatar };
 
     try {
-        // Kiểm tra nếu chuyên gia tồn tại
-        Expert.getExpertById(id, async (err, expertResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            if (expertResults.length === 0) {
-                return res.status(404).json({ error: 'Expert not found' });
-            }
+        Expert.getExpertById(id, (err, expertResults) => {
+            if (err) return res.status(500).json({ error: err });
+            if (expertResults.length === 0) return res.status(404).json({ error: 'Expert not found' });
 
-            // Cập nhật thông tin chuyên gia
-            Expert.updateExpert(id, expertData, async (err, updateResults) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
-
-                // Cập nhật thông tin trong bảng users nếu có thay đổi phone_number hoặc avatar
-                const userData = {};
-                if (phone_number) {
-                    userData.phone_number = phone_number;  // Cập nhật phone_number
-                }
-                if (avatar) {
-                    userData.avatar = avatar;  // Cập nhật avatar khi có thay đổi avatar
-                }
-
-                if (Object.keys(userData).length > 0) {
-                    User.updateUserByExpertId(id, userData, (err, userUpdateResults) => {
-                        if (err) {
-                            return res.status(500).json({ error: 'Failed to update user for expert' });
-                        }
-                        res.json({
-                            message: 'Expert and user updated successfully',
-                            avatar: expertData.avatar ? getBaseUrl(req) + expertData.avatar : null,
-                        });
-                    });
-                } else {
-                    res.json({
-                        message: 'Expert updated successfully',
-                        avatar: expertData.avatar ? getBaseUrl(req) + expertData.avatar : null,
-                    });
-                }
+            Expert.updateExpert(id, expertData, (err, updateResults) => {
+                if (err) return res.status(500).json({ error: err });
+                res.json({ message: 'Expert updated successfully', avatar });
             });
         });
     } catch (error) {
-        return res.status(500).json({ error: 'Failed to update expert and user' });
+        res.status(500).json({ error: error.message });
     }
 };
 
-// Xóa chuyên gia theo ID
 exports.deleteExpert = (req, res) => {
     const { id } = req.params;
     Expert.checkIfExpertExists(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0 || results[0].deleted_at) {
-            return res.status(404).json({ error: 'Expert not found' });
-        }
-        Expert.deleteExpert(id, (err, results) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
+        if (err) return res.status(500).json({ error: err });
+        if (results.length === 0 || results[0].deleted_at) return res.status(404).json({ error: 'Expert not found' });
+
+        Expert.deleteExpert(id, (err) => {
+            if (err) return res.status(500).json({ error: err });
             res.json({ message: 'Expert marked as deleted' });
         });
     });

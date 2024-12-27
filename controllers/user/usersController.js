@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const validator = require('validator');
 const User = require('../../models/user/userModel');
-const bucket = require('../../firebase'); // Import Firebase Storage bucket
+const bucket = require('../../firebase');
 require('dotenv').config();
 
 const getBaseUrl = (req) => {
@@ -93,7 +93,6 @@ const getProfessionalRequestString = (is_professional_request) => {
     }
 };
 
-// Tải ảnh lên Firebase Storage
 const uploadToFirebase = (file) => {
     return new Promise((resolve, reject) => {
         const { originalname, buffer } = file;
@@ -110,7 +109,7 @@ const uploadToFirebase = (file) => {
 
         blobStream.on('finish', async () => {
             try {
-                await blob.makePublic(); // Làm cho ảnh công khai
+                await blob.makePublic();
                 const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
                 resolve(publicUrl);
             } catch (error) {
@@ -122,7 +121,6 @@ const uploadToFirebase = (file) => {
     });
 };
 
-// Lấy tất cả người dùng với phân trang và tìm kiếm
 exports.getAllUsers = (req, res) => {
     const { page = 1, limit = 10, keyword = '' } = req.query;
     User.getAllUsers(page, limit, keyword, (err, results) => {
@@ -156,12 +154,10 @@ exports.getAllUsers = (req, res) => {
     });
 };
 
-// Lấy chi tiết người dùng theo ID
 exports.getUserById = async (req, res) => {
     const { id } = req.params;
-    const user_id = req.user.id; // ID của người đang đăng nhập
+    const user_id = req.user.id;
 
-    // Kiểm tra xem user đang đăng nhập có đang cố lấy đúng thông tin của mình không
     if (id != user_id) {
         return res.status(403).json({ error: 'You do not have permission to access this user' });
     }
@@ -186,22 +182,22 @@ exports.getUserById = async (req, res) => {
     }
 };
 
-// Cập nhật thông tin người dùng
 exports.updateUser = async (req, res) => {
-    const { id } = req.params;
-    const user_id = req.user.id; // ID của người dùng đang đăng nhập
+    const id = req.query.id || req.body.id;
+    const user_id = req.user.id;
 
     if (id != user_id) {
         return res.status(403).json({ error: 'You do not have permission to update this user' });
     }
 
-    const { username, password, sleep, stress, age, mood, gender, is_professional_request } = req.body;
+    const {
+        username, password, sleep, stress, age, mood, gender, is_professional_request
+    } = req.query.id ? req.query : req.body;
     let avatar;
 
-    // Kiểm tra nếu có file ảnh được gửi lên
     if (req.file) {
         try {
-            avatar = await uploadToFirebase(req.file); // Tải ảnh lên Firebase
+            avatar = await uploadToFirebase(req.file);
         } catch (error) {
             return res.status(500).json({ error: 'Error uploading file to Firebase' });
         }
@@ -219,7 +215,7 @@ exports.updateUser = async (req, res) => {
         userData.password = hash;
     }
     if (avatar) {
-        userData.avatar = avatar; // Cập nhật avatar
+        userData.avatar = avatar;
     }
     if (age) {
         userData.age = age;
@@ -246,7 +242,6 @@ exports.updateUser = async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Sau khi cập nhật thành công, lấy lại thông tin người dùng để trả về output như yêu cầu
         const updatedUser = await User.getUserById(id);
         if (updatedUser.length === 0) {
             return res.status(404).json({ error: 'User not found after update' });
@@ -256,7 +251,7 @@ exports.updateUser = async (req, res) => {
             msg: "success",
             code: 200,
             data: {
-                user: updatedUser[0] // Thông tin người dùng đã cập nhật
+                user: updatedUser[0]
             }
         });
     } catch (err) {
@@ -264,7 +259,6 @@ exports.updateUser = async (req, res) => {
     }
 };
 
-// Xóa người dùng theo ID
 exports.deleteUser = (req, res) => {
     const { id } = req.params;
     User.checkIfUserExists(id, (err, results) => {
@@ -283,7 +277,6 @@ exports.deleteUser = (req, res) => {
     });
 };
 
-// Tạm dừng tài khoản người dùng
 exports.pauseUser = (req, res) => {
     const { id } = req.params;
 

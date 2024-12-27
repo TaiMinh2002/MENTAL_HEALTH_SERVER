@@ -17,9 +17,9 @@ const User = {
       const query = 'SELECT * FROM users WHERE id = ? AND deleted_at IS NULL';
       db.query(query, [id], (err, results) => {
         if (err) {
-          return reject(err); // Ném ra lỗi nếu có
+          return reject(err);
         }
-        resolve(results); // Trả về kết quả nếu thành công
+        resolve(results);
       });
     });
   },

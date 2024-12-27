@@ -6,24 +6,25 @@ const { SECRET_KEY, TOKEN_EXPIRATION, REFRESH_TOKEN_EXPIRATION } = process.env;
 
 const revokedTokens = [];
 
-// Generate Token
 const generateToken = (user) => {
     return jwt.sign({ id: user.id, email: user.email, role: user.role }, SECRET_KEY, { expiresIn: TOKEN_EXPIRATION });
 };
 
-// Generate Refresh Token
 const generateRefreshToken = (user) => {
     return jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: REFRESH_TOKEN_EXPIRATION });
 };
 
 exports.signup = async (req, res) => {
-    const { identifier, username, password } = req.body;
+    const identifier = req.query.identifier;
+    const username = req.query.username;
+    const password = req.query.password;
+    const confirm_password = req.body.confirm_password || req.query.confirm_password;
+
 
     if (!identifier || !username || !password) {
         return res.status(400).json({ error: 'Username, identifier, and password are required' });
     }
 
-    // Xác định loại của identifier (email hoặc phone_number)
     let userData = { username, role: 2 };
     if (validator.isEmail(identifier)) {
         userData.email = identifier;
@@ -33,16 +34,13 @@ exports.signup = async (req, res) => {
         return res.status(400).json({ error: 'Identifier must be a valid email or phone number' });
     }
 
-    // Kiểm tra độ mạnh của mật khẩu
     if (!validator.isStrongPassword(password, { minLength: 8 })) {
         return res.status(402).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
     }
 
-    // Mã hóa mật khẩu
     userData.password = await bcrypt.hash(password, 10);
 
     try {
-        // Kiểm tra nếu email hoặc số điện thoại đã tồn tại
         User.getUserByEmailOrPhoneNumber(identifier, async (err, existingUser) => {
             if (err) {
                 console.error('Database error:', err);
@@ -54,7 +52,6 @@ exports.signup = async (req, res) => {
                 return res.status(400).json({ error: errorMsg });
             }
 
-            // Tạo người dùng mới
             User.createUser(userData, (err, result) => {
                 if (err) {
                     console.error('Failed to create user:', err);
@@ -69,7 +66,7 @@ exports.signup = async (req, res) => {
 };
 
 exports.login = (req, res) => {
-    const { identifier, password } = req.body;
+    const { identifier, password } = req.query;
 
     User.getUserByEmailOrPhoneNumber(identifier, (err, results) => {
         if (err) {
@@ -92,7 +89,6 @@ exports.login = (req, res) => {
                 return res.status(401).json({ error: 'Incorrect password' });
             }
 
-            // Tạo token và refresh token
             const token = generateToken(user);
             const refreshToken = generateRefreshToken(user);
 
@@ -109,7 +105,6 @@ exports.login = (req, res) => {
     });
 };
 
-// Refresh Token API
 exports.refreshToken = (req, res) => {
     const { refreshToken } = req.body;
 
@@ -128,21 +123,6 @@ exports.refreshToken = (req, res) => {
     });
 };
 
-// Logout API
 exports.logout = (req, res) => {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-        return res.status(400).json({ error: 'Refresh token is required' });
-    }
-
-    jwt.verify(refreshToken, SECRET_KEY, (err, user) => {
-        if (err) {
-            return res.status(401).json({ error: 'Invalid refresh token' });
-        }
-
-        revokedTokens.push(refreshToken);
-
-        res.json({ message: 'Logout successful' });
-    });
+    res.json({ message: 'Logout successful' });
 };

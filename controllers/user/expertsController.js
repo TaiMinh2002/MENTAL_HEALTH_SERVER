@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const validator = require('validator');
 const Expert = require('../../models/user/expertModel');
 const User = require('../../models/user/userModel');
-const bucket = require('../../firebase'); // Import Firebase Storage bucket
+const bucket = require('../../firebase');
 require('dotenv').config();
 
 const getBaseUrl = (req) => {
@@ -29,7 +29,6 @@ const getSpecializationString = (specialization) => {
     }
 };
 
-// Tải ảnh lên Firebase Storage
 const uploadToFirebase = (file) => {
     return new Promise((resolve, reject) => {
         const { originalname, buffer } = file;
@@ -46,7 +45,7 @@ const uploadToFirebase = (file) => {
 
         blobStream.on('finish', async () => {
             try {
-                await blob.makePublic(); // Làm cho ảnh công khai
+                await blob.makePublic();
                 const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
                 resolve(publicUrl);
             } catch (error) {
@@ -58,7 +57,6 @@ const uploadToFirebase = (file) => {
     });
 };
 
-// Lấy tất cả chuyên gia với phân trang và tìm kiếm
 exports.getAllExperts = (req, res) => {
     let { page = 1, limit = 10, keyword = '', specialization } = req.query;
     limit = limit ? parseInt(limit) : 10;
@@ -66,6 +64,7 @@ exports.getAllExperts = (req, res) => {
     if (!specialization) {
         return res.status(400).json({ error: "Specialization is required" });
     }
+
     Expert.getAllExperts(page, limit, keyword, parseInt(specialization), (err, results) => {
         if (err) {
             return res.status(500).json({ error: err });
@@ -80,34 +79,52 @@ exports.getAllExperts = (req, res) => {
             if (err) {
                 return res.status(500).json({ error: err });
             }
+
             const total = countResults[0].total;
+            const lastPage = Math.ceil(total / limit);
 
             res.json({
-                page: parseInt(page),
-                limit,
-                total,
-                total_page: Math.ceil(total / limit),
-                experts: expertsWithSpecializationString,
+                msg: "success",
+                code: 200,
+                data: {
+                    experts: {
+                        data: expertsWithSpecializationString,
+                        total,
+                        per_page: limit,
+                        current_page: parseInt(page),
+                        last_page: lastPage,
+                        has_more_pages: parseInt(page) < lastPage,
+                    },
+                },
             });
         });
     });
 };
 
-// Lấy chi tiết chuyên gia theo ID
 exports.getExpertById = (req, res) => {
     const { id } = req.params;
+
     Expert.getExpertById(id, (err, results) => {
         if (err) {
-            return res.status(500).json({ error: err });
+            console.error("Database error:", err);
+            return res.status(500).json({ error: "Internal server error" });
         }
+
         if (results.length === 0) {
-            return res.status(404).json({ error: 'Expert not found' });
+            return res.status(404).json({ error: "Expert not found" });
         }
 
-        // Lấy chi tiết chuyên gia và thêm specialization_string
-        const expert = results[0];
-        expert.specialization_string = getSpecializationString(expert.specialization);
+        const expert = {
+            ...results[0],
+            specialization_string: getSpecializationString(results[0].specialization)
+        };
 
-        res.json(expert);
+        res.json({
+            msg: "success",
+            code: 200,
+            data: {
+                expert
+            }
+        });
     });
 };

@@ -2,11 +2,27 @@ const db = require('../../config/db');
 
 const Post = {
     getAllPosts: (callback) => {
-        db.query('SELECT * FROM posts WHERE deleted_at IS NULL', callback);
+        const query = `
+        SELECT 
+            posts.*,
+            users.username AS username
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.deleted_at IS NULL
+    `;
+        db.query(query, callback);
     },
 
     getPostById: (id, callback) => {
-        db.query('SELECT * FROM posts WHERE id = ? AND deleted_at IS NULL', [id], callback);
+        const query = `
+        SELECT 
+            posts.*,
+            users.username AS username
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.id = ? AND posts.deleted_at IS NULL
+    `;
+        db.query(query, [id], callback);
     },
 
     createPost: (postData, callback) => {

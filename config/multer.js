@@ -1,71 +1,59 @@
 const multer = require('multer');
 const path = require('path');
 
-// Bộ nhớ tạm thời cho avatar
-const avatarStorage = multer.memoryStorage();
+// Bộ nhớ tạm thời (RAM)
+const storage = multer.memoryStorage();
 
-// Bộ lọc file để chỉ cho phép các định dạng ảnh
-const avatarFileFilter = (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png/;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    if (mimetype && extname) {
-        return cb(null, true);
+// Bộ lọc file tổng hợp
+const fileFilter = (req, file, cb) => {
+    const avatarFileTypes = /jpeg|jpg|png/; // Định dạng cho ảnh
+    const videoFileTypes = /mp4|mov|avi/;  // Định dạng cho video
+
+    // Kiểm tra tên trường
+    if (file.fieldname === 'avatar' || file.fieldname === 'thumbnail_url' || file.fieldname === 'cover_image') {
+        const isImage = avatarFileTypes.test(file.mimetype) && avatarFileTypes.test(path.extname(file.originalname).toLowerCase());
+        if (isImage) {
+            return cb(null, true);
+        }
+        return cb(new Error('Error: Only images are allowed for avatar/thumbnail/cover_image!'));
+    } else if (file.fieldname === 'media_url') {
+        const isVideo = videoFileTypes.test(file.mimetype) && videoFileTypes.test(path.extname(file.originalname).toLowerCase());
+        if (isVideo) {
+            return cb(null, true);
+        }
+        return cb(new Error('Error: Only videos are allowed for media!'));
     }
-    cb('Error: Only images are allowed!');
+
+    // Nếu không khớp với các trường hợp trên
+    cb(new Error('Error: Invalid field name!'));
 };
 
-// Bộ nhớ tạm thời cho video
-const videoStorage = multer.memoryStorage();
-
-// Bộ lọc file để chỉ cho phép các định dạng video
-const videoFileFilter = (req, file, cb) => {
-    const filetypes = /mp4|mov|avi/;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    if (mimetype && extname) {
-        return cb(null, true);
-    }
-    cb('Error: Only videos are allowed!');
+// Giới hạn kích thước file
+const limits = {
+    fileSize: 1024 * 1024 * 1024 // 1GB, có thể điều chỉnh nếu cần
 };
 
-// Cấu hình multer cho avatar
-const uploadAvatar = multer({
-    storage: avatarStorage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn kích thước file là 5MB
-    fileFilter: avatarFileFilter
-});
+// Cấu hình multer
+const upload = multer({ storage, fileFilter, limits });
 
-// Cấu hình multer cho video
-const uploadVideo = multer({
-    storage: videoStorage,
-    limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // Giới hạn kích thước file là 10GB
-    fileFilter: videoFileFilter
-});
+// Cấu hình cho từng loại file
+const uploadAvatar = upload.single('avatar'); // Upload 1 ảnh cho avatar
+const upLoadCoverImage = upload.single('cover_image'); // Upload 1 ảnh cho avatar
+const uploadVideo = upload.single('media_url'); // Upload 1 video cho media_url
+const uploadImages = upload.single('thumbnail_url'); // Upload 1 ảnh cho thumbnail
 
-// Bộ nhớ tạm thời cho ảnh
-const imageStorage = multer.memoryStorage();
+// Cấu hình cho upload đa trường
+const uploadMulti = upload.fields([
+    { name: 'avatar', maxCount: 1 },          // Tối đa 1 file ảnh đại diện
+    { name: 'media_url', maxCount: 1 },       // Tối đa 1 file video
+    { name: 'thumbnail_url', maxCount: 1 },
+    { name: 'cover_image', maxCount: 1 }// Tối đa 1 file ảnh thu nhỏ
+]);
 
-// Bộ lọc file để chỉ cho phép các định dạng ảnh
-const imageFileFilter = (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png/;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    if (mimetype && extname) {
-        return cb(null, true);
-    }
-    cb('Error: Only images are allowed!');
-};
-
-// Cấu hình multer cho ảnh
-const uploadImages = multer({
-    storage: imageStorage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn kích thước file là 5MB
-    fileFilter: imageFileFilter
-});
-
+// Export tất cả cấu hình
 module.exports = {
     uploadAvatar,
     uploadVideo,
-    uploadImages
+    uploadImages,
+    uploadMulti
 };

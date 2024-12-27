@@ -2,7 +2,7 @@ const Conversation = require('../../models/user/conversationModel');
 const Message = require('../../models/user/messageModel');
 
 exports.createConversation = (req, res) => {
-    const user1_id = req.user.id; // Lấy ID người dùng đang đăng nhập từ token
+    const user1_id = req.user.id;
     const { user2_id } = req.body;
 
     Conversation.create(user1_id, user2_id, (err, results) => {
@@ -25,7 +25,6 @@ exports.getConversations = (req, res) => {
             return res.status(500).json({ error: "Internal server error" });
         }
 
-        // Đếm tổng số cuộc trò chuyện
         Conversation.countByUserId(userId, (err, countResults) => {
             if (err) {
                 return res.status(500).json({ error: "Internal server error" });
@@ -48,7 +47,7 @@ exports.getConversations = (req, res) => {
 
 exports.sendMessage = (req, res) => {
     const { conversation_id, message } = req.body;
-    const sender_id = req.user.id; // Lấy ID người dùng từ token đã xác thực
+    const sender_id = req.user.id;
 
     Message.create(conversation_id, sender_id, message, (err, results) => {
         if (err) {

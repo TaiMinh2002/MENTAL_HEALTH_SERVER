@@ -16,71 +16,33 @@ const Forum = {
 
     const values = [user_id, `%${keyword}%`, parseInt(limit), parseInt(offset)];
 
-    // Gọi query và truyền callback
     db.query(query, values, callback);
   },
 
   getForumWithPosts: (id, callback) => {
     const query = `
-        SELECT forums.*, posts.id AS post_id, posts.forum_id, posts.user_id, 
-               posts.like_count, posts.comment_count, posts.content, 
-               posts.created_at AS post_created_at, posts.updated_at AS post_updated_at,
-               post_images.image AS post_image, users.username AS created_user_name
+        SELECT 
+            forums.*,
+            users.username AS created_user_name,
+            posts.id AS post_id,
+            posts.forum_id,
+            posts.user_id,
+            posts.title AS post_title, -- Lấy thêm title của post
+            posts.content,
+            posts.like_count,
+            posts.comment_count,
+            posts.created_at AS post_created_at,
+            posts.updated_at AS post_updated_at,
+            post_images.image AS post_image,
+            post_users.username AS post_user_name -- Lấy username của người đăng post
         FROM forums
-        LEFT JOIN posts ON forums.id = posts.forum_id
+        LEFT JOIN posts ON forums.id = posts.forum_id AND posts.deleted_at IS NULL
         LEFT JOIN post_images ON posts.id = post_images.post_id
         LEFT JOIN users ON forums.created_user_id = users.id
-        WHERE forums.id = ? AND forums.deleted_at IS NULL;
-    `;
+        LEFT JOIN users AS post_users ON posts.user_id = post_users.id -- Join thêm để lấy username người đăng post
+        WHERE forums.id = ? AND forums.deleted_at IS NULL`;
 
-    db.query(query, [id], (err, results) => {
-      if (err) {
-        console.error('Error retrieving forum with posts:', err);
-        return callback(err);
-      }
-
-      if (results.length === 0) {
-        return callback(null, { message: 'Forum not found' });
-      }
-
-      // Structure the forum data with posts and images
-      const forum = {
-        id: results[0].id,
-        title: results[0].title,
-        description: results[0].description,
-        cover_image: results[0].cover_image,
-        created_user_id: results[0].created_user_id,
-        created_user_name: results[0].created_user_name, // Added user's name
-        created_at: results[0].created_at,
-        updated_at: results[0].updated_at,
-        posts: results.reduce((acc, post) => {
-          // Check if the post already exists in the accumulated posts
-          const existingPost = acc.find(p => p.post_id === post.post_id);
-
-          if (existingPost) {
-            // If the post exists, push the new image to its images array
-            existingPost.images.push(post.post_image);
-          } else {
-            // If the post does not exist, create a new post object
-            acc.push({
-              post_id: post.post_id,
-              forum_id: post.forum_id,
-              user_id: post.user_id,
-              like_count: post.like_count,
-              comment_count: post.comment_count,
-              content: post.content,
-              post_created_at: post.post_created_at,
-              post_updated_at: post.post_updated_at,
-              images: post.post_image ? [post.post_image] : [] // Initialize with the first image
-            });
-          }
-
-          return acc;
-        }, []) // Initial empty array for accumulating posts
-      };
-
-      callback(null, forum);
-    });
+    db.query(query, [id], callback);
   },
 
   getForumById: (id, callback) => {
@@ -103,18 +65,15 @@ const Forum = {
   joinForum: (joinData, callback) => {
     const { forum_id, user_id } = joinData;
 
-    // Kiểm tra forum_id có tồn tại hay không
     const checkForumQuery = `SELECT id FROM forums WHERE id = ? AND deleted_at IS NULL`;
 
     db.query(checkForumQuery, [forum_id], (err, results) => {
       if (err) return callback(err);
 
       if (results.length === 0) {
-        // Nếu không tìm thấy forum_id
         return callback(null, { error: 'Forum not found' });
       }
 
-      // Thêm user vào forum_members
       const insertMemberQuery = `INSERT INTO forum_members SET ?`;
       db.query(insertMemberQuery, joinData, (err, insertResults) => {
         if (err) {
@@ -122,14 +81,12 @@ const Forum = {
           return callback(err);
         }
 
-        // Sau khi thêm user thành công, tăng member_count
         Forum.incrementMemberCount(forum_id, (err, updateResults) => {
           if (err) {
             console.error('Error updating member count:', err);
             return callback(err);
           }
 
-          // Trả về kết quả thành công
           callback(null, insertResults);
         });
       });
@@ -179,7 +136,6 @@ const Forum = {
 
     const values = [user_id, `%${keyword}%`];
 
-    // Gọi query và truyền callback
     db.query(query, values, callback);
   },
 
