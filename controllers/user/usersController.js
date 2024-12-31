@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const validator = require('validator');
 const User = require('../../models/user/userModel');
-const bucket = require('../../firebase');
+const { UploadClient } = require('@uploadcare/upload-client');
 require('dotenv').config();
 
 const getBaseUrl = (req) => {
@@ -93,32 +93,18 @@ const getProfessionalRequestString = (is_professional_request) => {
     }
 };
 
-const uploadToFirebase = (file) => {
-    return new Promise((resolve, reject) => {
-        const { originalname, buffer } = file;
-        const blob = bucket.file(originalname);
-        const blobStream = blob.createWriteStream({
-            metadata: {
-                contentType: file.mimetype
-            }
+const uploadToUploadcare = async (file) => {
+    try {
+        const client = new UploadClient({ publicKey: process.env.UPLOADCARE_PUBLIC_KEY });
+        const response = await client.uploadFile(file.buffer, {
+            fileName: file.originalname,
+            contentType: file.mimetype,
         });
-
-        blobStream.on('error', (err) => {
-            reject(err);
-        });
-
-        blobStream.on('finish', async () => {
-            try {
-                await blob.makePublic();
-                const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-                resolve(publicUrl);
-            } catch (error) {
-                reject(error);
-            }
-        });
-
-        blobStream.end(buffer);
-    });
+        return response.cdnUrl;
+    } catch (error) {
+        console.error('Error uploading to Uploadcare:', error.message);
+        throw new Error('Error uploading file to Uploadcare');
+    }
 };
 
 exports.getAllUsers = (req, res) => {
@@ -197,9 +183,9 @@ exports.updateUser = async (req, res) => {
 
     if (req.file) {
         try {
-            avatar = await uploadToFirebase(req.file);
+            avatar = await uploadToUploadcare(req.file);
         } catch (error) {
-            return res.status(500).json({ error: 'Error uploading file to Firebase' });
+            return res.status(500).json({ error: 'Error uploading file to Uploadcare' });
         }
     }
 

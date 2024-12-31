@@ -17,17 +17,15 @@ const uploadToUploadcare = async (file) => {
     }
 };
 
-// Lấy tất cả các bài đăng
 exports.getAllPosts = (req, res) => {
     Post.getAllPosts((err, results) => {
         if (err) {
             return res.status(500).json({ error: err });
         }
-        res.json(results); // Kết quả sẽ bao gồm cả `username`
+        res.json(results);
     });
 };
 
-// Lấy chi tiết bài đăng theo ID
 exports.getPostById = (req, res) => {
     const { id } = req.params;
     Post.getPostById(id, (err, results) => {
@@ -37,42 +35,37 @@ exports.getPostById = (req, res) => {
         if (results.length === 0) {
             return res.status(404).json({ error: 'Post not found' });
         }
-        res.json(results[0]); // Kết quả sẽ bao gồm cả `username`
+        res.json(results[0]);
     });
 };
 
-// Tạo bài đăng mới
 exports.createPost = async (req, res) => {
     const { forum_id, title, content } = req.query;
-    const user_id = req.user.id; // Assuming req.user contains the logged-in user's info
-
+    const user_id = req.user.id;
     const postData = { forum_id, user_id, title, content };
 
-    // Tạo bài đăng
     Post.createPost(postData, (err, insertResults) => {
         if (err) {
             return res.status(500).json({ error: err });
         }
 
-        // Tăng số lượng bài viết trong diễn đàn
         Forum.incrementPostCount(forum_id, (err) => {
             if (err) {
                 return res.status(500).json({ error: 'Error updating post count' });
             }
             res.json({
                 message: 'Post created successfully',
-                post_id: insertResults.insertId, // Trả thêm post_id
-                forum_id: +forum_id // Ép kiểu forum_id thành số nguyên
+                post_id: insertResults.insertId,
+                forum_id: +forum_id
             });
         });
     });
 };
 
-// Cập nhật bài đăng
 exports.updatePost = async (req, res) => {
     const { id } = req.params;
     const { forum_id, title, content } = req.body;
-    const user_id = req.user.id; // Assuming req.user contains the logged-in user's info
+    const user_id = req.user.id;
 
     const postData = { forum_id, user_id, title, content };
 
@@ -99,7 +92,6 @@ exports.updatePost = async (req, res) => {
     });
 };
 
-// Xóa bài đăng theo ID
 exports.deletePost = (req, res) => {
     const { id } = req.params;
     const user_id = req.user.id;

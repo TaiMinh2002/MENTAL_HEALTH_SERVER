@@ -2,7 +2,6 @@ const bcrypt = require('bcryptjs');
 const validator = require('validator');
 const Expert = require('../../models/user/expertModel');
 const User = require('../../models/user/userModel');
-const bucket = require('../../firebase');
 require('dotenv').config();
 
 const getBaseUrl = (req) => {
@@ -27,34 +26,6 @@ const getSpecializationString = (specialization) => {
         default:
             return 'Unknown';
     }
-};
-
-const uploadToFirebase = (file) => {
-    return new Promise((resolve, reject) => {
-        const { originalname, buffer } = file;
-        const blob = bucket.file(originalname);
-        const blobStream = blob.createWriteStream({
-            metadata: {
-                contentType: file.mimetype
-            }
-        });
-
-        blobStream.on('error', (err) => {
-            reject(err);
-        });
-
-        blobStream.on('finish', async () => {
-            try {
-                await blob.makePublic();
-                const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-                resolve(publicUrl);
-            } catch (error) {
-                reject(error);
-            }
-        });
-
-        blobStream.end(buffer);
-    });
 };
 
 exports.getAllExperts = (req, res) => {
