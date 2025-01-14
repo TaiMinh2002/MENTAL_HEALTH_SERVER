@@ -1,43 +1,63 @@
 const db = require('../../config/db');
 
 const Expert = {
-    getAllExperts: (page, limit, keyword, callback) => {
+    getAllExperts: async (page, limit, keyword) => {
         const offset = (page - 1) * limit;
-        const query = `SELECT * FROM experts WHERE deleted_at IS NULL AND name LIKE ? LIMIT ? OFFSET ?`;
-        const values = [`%${keyword}%`, parseInt(limit), offset];
-        db.query(query, values, callback);
+        return await db('experts')
+            .whereNull('deleted_at')
+            .andWhere('name', 'like', `%${keyword}%`)
+            .limit(limit)
+            .offset(offset)
+            .select('*');
     },
 
-    getExpertById: (id, callback) => {
-        db.query(`SELECT * FROM experts WHERE id = ? AND deleted_at IS NULL`, [id], callback);
+    getExpertById: async (id) => {
+        return await db('experts')
+            .where({ id })
+            .whereNull('deleted_at')
+            .first();
     },
 
-    createExpert: (expertData, callback) => {
-        db.query(`INSERT INTO experts SET ?`, expertData, callback);
+    createExpert: async (expertData) => {
+        const [id] = await db('experts').insert(expertData);
+        return id;
     },
 
-    updateExpert: (id, expertData, callback) => {
-        db.query(`UPDATE experts SET ? WHERE id = ?`, [expertData, id], callback);
+    updateExpert: async (id, expertData) => {
+        return await db('experts')
+            .where({ id })
+            .whereNull('deleted_at')
+            .update(expertData);
     },
 
-    deleteExpert: (id, callback) => {
-        const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        db.query(`UPDATE experts SET deleted_at = ? WHERE id = ?`, [deletedAt, id], callback);
+    deleteExpert: async (id) => {
+        const deletedAt = new Date();
+        return await db('experts')
+            .where({ id })
+            .update({ deleted_at: deletedAt });
     },
 
-    checkIfExpertExists: (id, callback) => {
-        db.query(`SELECT * FROM experts WHERE id = ?`, [id], callback);
+    checkIfExpertExists: async (id) => {
+        return await db('experts')
+            .where({ id })
+            .whereNull('deleted_at')
+            .first();
     },
 
-    checkPhoneNumberExists: (phone_number, callback) => {
-        db.query(`SELECT id FROM experts WHERE phone_number = ? AND deleted_at IS NULL`, [phone_number], callback);
+    checkPhoneNumberExists: async (phone_number) => {
+        return await db('experts')
+            .where({ phone_number })
+            .whereNull('deleted_at')
+            .first();
     },
 
-    countAllExperts: (keyword, callback) => {
-        const query = `SELECT COUNT(*) AS total FROM experts WHERE deleted_at IS NULL AND name LIKE ?`;
-        const value = `%${keyword}%`;
-        db.query(query, [value], callback);
-    }
+    countAllExperts: async (keyword) => {
+        const result = await db('experts')
+            .whereNull('deleted_at')
+            .andWhere('name', 'like', `%${keyword}%`)
+            .count('* as total');
+        return result[0].total;
+    },
 };
 
 module.exports = Expert;

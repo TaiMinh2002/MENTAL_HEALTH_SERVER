@@ -1,161 +1,141 @@
 const db = require('../../config/db');
 
 const Forum = {
-  getAllForums: (user_id, keyword, limit, offset, callback) => {
-    const query = `
-            SELECT forums.*, users.username AS created_user_name,
-                CASE
-                    WHEN forum_members.user_id IS NOT NULL THEN true
-                    ELSE false
-                END AS is_joined
-            FROM forums
-            JOIN users ON forums.created_user_id = users.id
-            LEFT JOIN forum_members ON forums.id = forum_members.forum_id AND forum_members.user_id = ?
-            WHERE forums.deleted_at IS NULL AND forums.title LIKE ?
-            LIMIT ? OFFSET ?`;
-
-    const values = [user_id, `%${keyword}%`, parseInt(limit), parseInt(offset)];
-
-    db.query(query, values, callback);
+  getAllForums: async (user_id, keyword, limit, offset) => {
+    return await db('forums')
+        .join('users', 'forums.created_user_id', 'users.id')
+        .leftJoin('forum_members', function () {
+            this.on('forums.id', 'forum_members.forum_id')
+                .andOn('forum_members.user_id', '=', user_id);
+        })
+        .whereNull('forums.deleted_at')
+        .andWhere('forums.title', 'like', `%${keyword}%`)
+        .select(
+            'forums.*',
+            'users.username as created_user_name',
+            db.raw('CASE WHEN forum_members.user_id IS NOT NULL THEN true ELSE false END AS is_joined')
+        )
+        .limit(limit)
+        .offset(offset);
   },
 
-  getForumWithPosts: (id, callback) => {
-    const query = `
-        SELECT 
-            forums.*,
-            users.username AS created_user_name,
-            posts.id AS post_id,
-            posts.forum_id,
-            posts.user_id,
-            posts.title AS post_title, -- Lấy thêm title của post
-            posts.content,
-            posts.like_count,
-            posts.comment_count,
-            posts.created_at AS post_created_at,
-            posts.updated_at AS post_updated_at,
-            post_images.image AS post_image,
-            post_users.username AS post_user_name -- Lấy username của người đăng post
-        FROM forums
-        LEFT JOIN posts ON forums.id = posts.forum_id AND posts.deleted_at IS NULL
-        LEFT JOIN post_images ON posts.id = post_images.post_id
-        LEFT JOIN users ON forums.created_user_id = users.id
-        LEFT JOIN users AS post_users ON posts.user_id = post_users.id -- Join thêm để lấy username người đăng post
-        WHERE forums.id = ? AND forums.deleted_at IS NULL`;
-
-    db.query(query, [id], callback);
+  getForumWithPosts: async (id) => {
+    return await db('forums')
+      .leftJoin('posts', function () {
+        this.on('forums.id', 'posts.forum_id').andOnNull('posts.deleted_at');
+      })
+      .leftJoin('post_images', 'posts.id', 'post_images.post_id')
+      .leftJoin('users', 'forums.created_user_id', 'users.id')
+      .leftJoin('users as post_users', 'posts.user_id', 'post_users.id')
+      .where('forums.id', id)
+      .whereNull('forums.deleted_at')
+      .select(
+        'forums.*',
+        'users.username as created_user_name',
+        'posts.id as post_id',
+        'posts.title as post_title',
+        'posts.content',
+        'posts.like_count',
+        'posts.comment_count',
+        'posts.created_at as post_created_at',
+        'posts.updated_at as post_updated_at',
+        'post_images.image as post_image',
+        'post_users.username as post_user_name'
+      );
   },
 
-  getForumById: (id, callback) => {
-    db.query('SELECT * FROM forums WHERE id = ? AND deleted_at IS NULL', [id], callback);
+  getForumById: async (id) => {
+    return await db('forums')
+      .where({ id })
+      .whereNull('deleted_at')
+      .first();
   },
 
-  createForum: (forumData, callback) => {
-    db.query('INSERT INTO forums SET ?', forumData, callback);
+  createForum: async (forumData) => {
+    const [id] = await db('forums').insert(forumData);
+    return id;
   },
 
-  updateForum: (id, forumData, callback) => {
-    db.query('UPDATE forums SET ? WHERE id = ?', [forumData, id], callback);
+  updateForum: async (id, forumData) => {
+    return await db('forums')
+      .where({ id })
+      .whereNull('deleted_at')
+      .update(forumData);
   },
 
-  deleteForum: (id, callback) => {
-    const deleted_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    db.query('UPDATE forums SET deleted_at = ? WHERE id = ?', [deleted_at, id], callback);
+  deleteForum: async (id) => {
+    return await db('forums')
+      .where({ id })
+      .update({ deleted_at: new Date() });
   },
 
-  joinForum: (joinData, callback) => {
-    const { forum_id, user_id } = joinData;
+  joinForum: async (joinData) => {
+    const forumExists = await db('forums')
+      .where({ id: joinData.forum_id })
+      .whereNull('deleted_at')
+      .first();
 
-    const checkForumQuery = `SELECT id FROM forums WHERE id = ? AND deleted_at IS NULL`;
+    if (!forumExists) {
+      throw new Error('Forum not found');
+    }
 
-    db.query(checkForumQuery, [forum_id], (err, results) => {
-      if (err) return callback(err);
-
-      if (results.length === 0) {
-        return callback(null, { error: 'Forum not found' });
-      }
-
-      const insertMemberQuery = `INSERT INTO forum_members SET ?`;
-      db.query(insertMemberQuery, joinData, (err, insertResults) => {
-        if (err) {
-          console.error('SQL Error:', err);
-          return callback(err);
-        }
-
-        Forum.incrementMemberCount(forum_id, (err, updateResults) => {
-          if (err) {
-            console.error('Error updating member count:', err);
-            return callback(err);
-          }
-
-          callback(null, insertResults);
-        });
-      });
-    });
+    await db('forum_members').insert(joinData);
+    return await db('forums')
+      .where({ id: joinData.forum_id })
+      .increment('member_count', 1);
   },
 
-  outForum: (forum_id, user_id, callback) => {
-    const deleteQuery = `DELETE FROM forum_members WHERE forum_id = ? AND user_id = ?`;
-
-    db.query(deleteQuery, [forum_id, user_id], (err, results) => {
-      if (err) {
-        console.error('SQL Error:', err);
-        return callback(err);
-      }
-      callback(null, results);
-    });
+  outForum: async (forum_id, user_id) => {
+    await db('forum_members')
+      .where({ forum_id, user_id })
+      .delete();
+    return await db('forums')
+      .where({ id: forum_id })
+      .decrement('member_count', 1);
   },
 
-  incrementMemberCount: (forum_id, callback) => {
-    const query = `UPDATE forums SET member_count = member_count + 1 WHERE id = ?`;
-    db.query(query, [forum_id], (err, results) => {
-      if (err) {
-        console.error('SQL Error:', err);
-        return callback(err);
-      }
-      callback(null, results);
-    });
+  countAllForums: async (user_id, keyword) => {
+    const result = await db('forums')
+        .leftJoin('forum_members', function () {
+            this.on('forums.id', 'forum_members.forum_id')
+                .andOn('forum_members.user_id', '=', user_id);
+        })
+        .whereNull('forums.deleted_at')
+        .andWhere('forums.title', 'like', `%${keyword}%`)
+        .count('* as total');
+    return parseInt(result[0].total, 10);
   },
 
-  decrementMemberCount: (forum_id, callback) => {
-    const query = `UPDATE forums SET member_count = member_count - 1 WHERE id = ?`;
-    db.query(query, [forum_id], (err, results) => {
-      if (err) {
-        console.error('SQL Error:', err);
-        return callback(err);
-      }
-      callback(null, results);
-    });
+  incrementMemberCount: async (forum_id) => {
+    return await db('forums')
+      .where({ id: forum_id })
+      .increment('member_count', 1);
   },
 
-  countAllForums: (user_id, keyword, callback) => {
-    const query = `
-            SELECT COUNT(*) AS total
-            FROM forums
-            LEFT JOIN forum_members ON forums.id = forum_members.forum_id AND forum_members.user_id = ?
-            WHERE forums.deleted_at IS NULL AND forums.title LIKE ?`;
-
-    const values = [user_id, `%${keyword}%`];
-
-    db.query(query, values, callback);
+  decrementMemberCount: async (forum_id) => {
+    return await db('forums')
+      .where({ id: forum_id })
+      .decrement('member_count', 1);
   },
 
-  incrementPostCount: (forum_id, callback) => {
-    db.query('UPDATE forums SET post_count = post_count + 1 WHERE id = ?', [forum_id], (err, results) => {
-      if (err) {
-        console.error('SQL Error:', err);
-      }
-      callback(err, results);
-    });
+  incrementPostCount: async (forum_id) => {
+    return await db('forums')
+      .where({ id: forum_id })
+      .increment('post_count', 1);
   },
 
-  decrementPostCount: (forum_id, callback) => {
-    db.query('UPDATE forums SET post_count = post_count - 1 WHERE id = ?', [forum_id], (err, results) => {
-      if (err) {
-        console.error('SQL Error:', err);
-      }
-      callback(err, results);
-    });
-  }
+  decrementPostCount: async (forum_id) => {
+    return await db('forums')
+      .where({ id: forum_id })
+      .decrement('post_count', 1);
+  },
+
+  checkForumExists: async (forum_id) => {
+    return await db('forums')
+      .where({ id: forum_id })
+      .whereNull('deleted_at')
+      .first();
+  },
 };
 
 module.exports = Forum;

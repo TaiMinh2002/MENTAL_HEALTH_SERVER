@@ -16,49 +16,41 @@ const uploadToUploadcare = async (file) => {
     }
 };
 
-exports.getAllForums = (req, res) => {
+exports.getAllForums = async (req, res) => {
     const { page = 1, limit = 10, keyword = '' } = req.query;
-    const offset = (page > 0 ? page - 1 : 0) * limit;
+    const offset = (page - 1) * limit;
     const user_id = req.user.id;
 
-    Forum.getAllForums(user_id, keyword, limit, offset, (err, results) => {
-        if (err) {
-            return res.status(500).json({ msg: 'error', code: 500, error: err });
-        }
+    try {
+        const forums = await Forum.getAllForums(user_id, keyword, parseInt(limit), offset);
 
-        Forum.countAllForums(user_id, keyword, (err, countResults) => {
-            if (err) {
-                return res.status(500).json({ msg: 'error', code: 500, error: err });
-            }
+        const total = await Forum.countAllForums(user_id, keyword);
 
-            const total = countResults[0].total;
-            const totalPages = Math.ceil(total / limit);
-
-            res.json({
-                msg: 'success',
-                code: 200,
-                data: {
-                    forums: {
-                        data: results,
-                        total: total,
-                        per_page: parseInt(limit),
-                        current_page: parseInt(page),
-                        last_page: totalPages,
-                        has_more_pages: parseInt(page) < totalPages
-                    }
-                }
-            });
+        res.json({
+            msg: 'success',
+            code: 200,
+            data: {
+                forums: {
+                    data: forums,
+                    total,
+                    per_page: parseInt(limit),
+                    current_page: parseInt(page),
+                    last_page: Math.ceil(total / limit),
+                    has_more_pages: page < Math.ceil(total / limit),
+                },
+            },
         });
-    });
+    } catch (err) {
+        console.error('Error fetching forums:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };
 
-exports.getForumById = (req, res) => {
+exports.getForumById = async (req, res) => {
     const forumId = req.params.id;
 
-    Forum.getForumWithPosts(forumId, (err, results) => {
-        if (err) {
-            return res.status(500).json({ msg: 'error', code: 500, error: 'Failed to fetch forum with posts' });
-        }
+    try {
+        const results = await Forum.getForumWithPosts(forumId);
 
         if (results.length === 0) {
             return res.status(404).json({ msg: 'error', code: 404, error: 'Forum not found' });
@@ -75,7 +67,7 @@ exports.getForumById = (req, res) => {
             created_user_name: results[0].created_user_name,
             created_at: results[0].created_at,
             updated_at: results[0].updated_at,
-            posts: []
+            posts: [],
         };
 
         const postsMap = new Map();
@@ -93,7 +85,7 @@ exports.getForumById = (req, res) => {
                         comment_count: row.comment_count,
                         post_created_at: row.post_created_at,
                         post_updated_at: row.post_updated_at,
-                        images: []
+                        images: [],
                     });
                 }
 
@@ -108,11 +100,12 @@ exports.getForumById = (req, res) => {
         res.json({
             msg: 'success',
             code: 200,
-            data: {
-                forum
-            }
+            data: { forum },
         });
-    });
+    } catch (err) {
+        console.error('Error fetching forum by ID:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };
 
 exports.createForum = async (req, res) => {
@@ -131,26 +124,19 @@ exports.createForum = async (req, res) => {
 
     const forumData = { title, description, cover_image, created_user_id };
 
-    Forum.createForum(forumData, (err, insertResults) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-
-        const newForumId = insertResults.insertId;
-        const joinData = {
+    try {
+        const newForumId = await Forum.createForum(forumData);
+        await Forum.joinForum({
             forum_id: newForumId,
             user_id: created_user_id,
-            joined_at: new Date()
-        };
-
-        Forum.joinForum(joinData, (err) => {
-            if (err) {
-                return res.status(500).json({ error: 'Error adding user to forum_members' });
-            }
-
-            res.json({ message: 'success', code: 200, id: newForumId });
+            joined_at: new Date(),
         });
-    });
+
+        res.json({ msg: 'success', code: 200, id: newForumId });
+    } catch (err) {
+        console.error('Error creating forum:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };
 
 exports.updateForum = async (req, res) => {
@@ -159,11 +145,12 @@ exports.updateForum = async (req, res) => {
     const created_user_id = req.user.id;
     let cover_image = null;
 
-    if (req.file) {
+    if (req.files && req.files.cover_image) {
         try {
-            cover_image = await uploadToUploadcare(req.file);
+            const file = req.files.cover_image[0];
+            cover_image = await uploadToUploadcare(file);
         } catch (err) {
-            return res.status(500).json({ msg: 'error', code: 500, error: 'Error uploading file to Uploadcare' });
+            return res.status(500).json({ error: 'Error uploading file to Uploadcare' });
         }
     }
 
@@ -172,119 +159,72 @@ exports.updateForum = async (req, res) => {
     if (description) forumData.description = description;
     if (cover_image) forumData.cover_image = cover_image;
 
-    // Kiểm tra nếu không có trường nào để cập nhật
-    if (Object.keys(forumData).length === 0) {
-        return res.status(400).json({ msg: 'error', code: 400, error: 'No fields to update' });
-    }
+    try {
+        const forum = await Forum.getForumById(id);
 
-    Forum.getForumById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ msg: 'error', code: 500, error: err });
-        }
-
-        if (results.length === 0) {
+        if (!forum) {
             return res.status(404).json({ msg: 'error', code: 404, error: 'Forum not found' });
         }
 
-        const forum = results[0];
-
         if (forum.created_user_id !== created_user_id) {
-            return res.status(403).json({ msg: 'error', code: 403, error: 'You do not have permission to update this forum' });
+            return res.status(403).json({ msg: 'error', code: 403, error: 'Permission denied' });
         }
 
-        Forum.updateForum(id, forumData, (err) => {
-            if (err) {
-                return res.status(500).json({ msg: 'error', code: 500, error: err });
-            }
+        await Forum.updateForum(id, forumData);
 
-            // Fetch updated forum data
-            Forum.getForumById(id, (err, updatedResults) => {
-                if (err) {
-                    return res.status(500).json({ msg: 'error', code: 500, error: err });
-                }
-
-                const updatedForum = updatedResults[0];
-                res.json({
-                    msg: 'success',
-                    code: 200,
-                    data: {
-                        forum: updatedForum
-                    }
-                });
-            });
-        });
-    });
+        const updatedForum = await Forum.getForumById(id);
+        res.json({ msg: 'success', code: 200, data: { forum: updatedForum } });
+    } catch (err) {
+        console.error('Error updating forum:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };
 
-exports.deleteForum = (req, res) => {
+exports.deleteForum = async (req, res) => {
     const { id } = req.params;
     const user_id = req.user.id;
 
-    Forum.getForumById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
-        }
+    try {
+        const forum = await Forum.getForumById(id);
 
-        if (results.length === 0) {
+        if (!forum) {
             return res.status(404).json({ msg: 'error', code: 404, error: 'Forum not found' });
         }
-
-        const forum = results[0];
 
         if (forum.created_user_id !== user_id) {
-            return res.status(403).json({ msg: 'error', code: 403, error: 'You do not have permission to delete this forum' });
+            return res.status(403).json({ msg: 'error', code: 403, error: 'Permission denied' });
         }
 
-        Forum.deleteForum(id, (err) => {
-            if (err) {
-                return res.status(500).json({ msg: 'error', code: 500, error: err });
-            }
-            res.json({ msg: 'success', code: 200 });
-        });
-    });
+        await Forum.deleteForum(id);
+        res.json({ msg: 'success', code: 200 });
+    } catch (err) {
+        console.error('Error deleting forum:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };
 
-exports.joinForum = (req, res) => {
+exports.joinForum = async (req, res) => {
     const { forum_id } = req.query;
     const user_id = req.user.id;
 
-    const joinData = {
-        forum_id: forum_id,
-        user_id: user_id,
-        joined_at: new Date()
-    };
-
-    Forum.joinForum(joinData, (err, result) => {
-        if (err) {
-            console.error('Error adding user to forum_members:', err);
-            return res.status(500).json({ msg: 'error', code: 500, error: 'Error adding user to forum_members' });
-        }
-
-        if (result && result.error) {
-            return res.status(404).json({ msg: 'error', code: 404, error: 'Forum not found' });
-        }
-
+    try {
+        await Forum.joinForum({ forum_id, user_id, joined_at: new Date() });
         res.json({ msg: 'success', code: 200, forum_id });
-    });
+    } catch (err) {
+        console.error('Error joining forum:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };
 
-exports.outForum = (req, res) => {
+exports.outForum = async (req, res) => {
     const { forum_id } = req.query;
     const user_id = req.user.id;
 
-    Forum.outForum(forum_id, user_id, (err) => {
-        if (err) {
-            console.error('Error updating forum_members:', err);
-            return res.status(500).json({ msg: 'error', code: 500, error: 'Error updating forum_members' });
-        }
-
-        Forum.decrementMemberCount(forum_id, (err) => {
-            if (err) {
-                console.error('Error updating member count:', err);
-                return res.status(500).json({ msg: 'error', code: 500, error: 'Error updating member count' });
-            }
-
-            res.json({ msg: 'success', code: 200, forum_id });
-        });
-    });
+    try {
+        await Forum.outForum(forum_id, user_id);
+        res.json({ msg: 'success', code: 200, forum_id });
+    } catch (err) {
+        console.error('Error leaving forum:', err);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };

@@ -15,14 +15,14 @@ const generateRefreshToken = (user) => {
 };
 
 exports.signup = async (req, res) => {
-    const identifier = req.query.identifier;
-    const username = req.query.username;
-    const password = req.query.password;
-    const confirm_password = req.body.confirm_password || req.query.confirm_password;
+    const { identifier, username, password, confirm_password } = req.query;
 
+    if (!identifier || !username || !password || !confirm_password) {
+        return res.status(400).json({ error: 'Username, identifier, password, and confirm password are required' });
+    }
 
-    if (!identifier || !username || !password) {
-        return res.status(400).json({ error: 'Username, identifier, and password are required' });
+    if (password !== confirm_password) {
+        return res.status(400).json({ error: 'Password and confirm password do not match' });
     }
 
     let userData = { username, role: 2 };
@@ -35,74 +35,61 @@ exports.signup = async (req, res) => {
     }
 
     if (!validator.isStrongPassword(password, { minLength: 8 })) {
-        return res.status(402).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
+        return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
     }
 
     userData.password = await bcrypt.hash(password, 10);
 
     try {
-        User.getUserByEmailOrPhoneNumber(identifier, async (err, existingUser) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Internal server error' });
-            }
+        const existingUser = await User.getUserByEmailOrPhoneNumber(identifier);
+        if (existingUser) {
+            const errorMsg = userData.email ? 'Email already exists' : 'Phone number already exists';
+            return res.status(400).json({ error: errorMsg });
+        }
 
-            if (existingUser.length > 0) {
-                const errorMsg = userData.email ? 'Email already exists' : 'Phone number already exists';
-                return res.status(400).json({ error: errorMsg });
-            }
-
-            User.createUser(userData, (err, result) => {
-                if (err) {
-                    console.error('Failed to create user:', err);
-                    return res.status(500).json({ error: 'Failed to create user' });
-                }
-                res.status(201).json({ message: 'User created successfully', data: { id: result.insertId } });
-            });
-        });
+        const userId = await User.createUser(userData);
+        res.status(201).json({ message: 'User created successfully', data: { id: userId } });
     } catch (err) {
+        console.error('Failed to create user:', err);
         res.status(500).json({ error: 'Failed to create user' });
     }
 };
 
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
     const { identifier, password } = req.query;
 
-    User.getUserByEmailOrPhoneNumber(identifier, (err, results) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Internal server error' });
-        }
+    try {
+        const user = await User.getUserByEmailOrPhoneNumber(identifier);
 
-        if (!results || results.length === 0) {
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-
-        const user = results[0];
 
         if (user.status !== 1) {
             return res.status(403).json({ error: 'User account is disabled' });
         }
 
-        bcrypt.compare(password, user.password, (err, isMatch) => {
-            if (err || !isMatch) {
-                return res.status(401).json({ error: 'Incorrect password' });
-            }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Incorrect password' });
+        }
 
-            const token = generateToken(user);
-            const refreshToken = generateRefreshToken(user);
+        const token = generateToken(user);
+        const refreshToken = generateRefreshToken(user);
 
-            res.json({
-                msg: "success",
-                code: 200,
-                data: {
-                    user,
-                    token,
-                    refreshToken
-                }
-            });
+        res.json({
+            msg: "success",
+            code: 200,
+            data: {
+                user,
+                token,
+                refreshToken,
+            },
         });
-    });
+    } catch (err) {
+        console.error('Failed to log in:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
 exports.refreshToken = (req, res) => {
@@ -112,15 +99,18 @@ exports.refreshToken = (req, res) => {
         return res.status(400).json({ error: 'Refresh token is required' });
     }
 
-    jwt.verify(refreshToken, SECRET_KEY, (err, user) => {
-        if (err || revokedTokens.includes(refreshToken)) {
+    try {
+        const user = jwt.verify(refreshToken, SECRET_KEY);
+        if (revokedTokens.includes(refreshToken)) {
             return res.status(401).json({ error: 'Invalid refresh token' });
         }
 
         const newToken = generateToken(user);
-
         res.json({ token: newToken });
-    });
+    } catch (err) {
+        console.error('Failed to refresh token:', err);
+        res.status(401).json({ error: 'Invalid refresh token' });
+    }
 };
 
 exports.logout = (req, res) => {

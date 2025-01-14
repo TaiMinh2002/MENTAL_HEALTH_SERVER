@@ -1,4 +1,4 @@
-const { saveConversation, getConversationsByUserId } = require('../../models/user/conversationModel');
+const { saveConversation, getConversationsByUserId, countConversationsByUserId } = require('../../models/user/conversationModel');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -9,20 +9,23 @@ exports.sendMessageToChatbot = async (req, res) => {
     const userId = req.user.id;
     const { message } = req.body;
 
+    if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+    }
+
     try {
         const result = await model.generateContent(message);
-        const botReply = result.response.text();
+        const bot_reply = result.response.text();
 
-        saveConversation(userId, message, botReply, (err, result) => {
-            if (err) {
-                console.error("Database error:", err);
-                return res.status(500).json({ error: "Internal server error" });
+        await saveConversation(userId, message, bot_reply);
+
+        res.json({
+            code: 200,
+            message: "success",
+            sendMessage: {
+                user_message: message,
+                bot_reply,
             }
-            res.json({
-                message: "Message processed successfully",
-                userMessage: message,
-                botReply
-            });
         });
     } catch (error) {
         console.error("Error with chatbot integration:", error);
@@ -30,17 +33,32 @@ exports.sendMessageToChatbot = async (req, res) => {
     }
 };
 
-exports.getConversationHistory = (req, res) => {
+exports.getConversationHistory = async (req, res) => {
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
     const userId = req.user.id;
 
-    getConversationsByUserId(userId, (err, results) => {
-        if (err) {
-            console.error("Database error:", err);
-            return res.status(500).json({ error: "Internal server error" });
-        }
+    try {
+        const conversations = await getConversationsByUserId(userId, parseInt(limit), offset);
+
+        const total = await countConversationsByUserId(userId);
+
         res.json({
-            message: "Conversation history retrieved successfully",
-            data: results
+            msg: 'success',
+            code: 200,
+            data: {
+                conversations: {
+                    data: conversations,
+                    total,
+                    per_page: parseInt(limit),
+                    current_page: parseInt(page),
+                    last_page: Math.ceil(total / limit),
+                    has_more_pages: page < Math.ceil(total / limit),
+                },
+            },
         });
-    });
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).json({ msg: 'error', code: 500, error: 'Internal server error' });
+    }
 };

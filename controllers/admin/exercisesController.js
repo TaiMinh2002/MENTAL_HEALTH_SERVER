@@ -2,7 +2,6 @@ const Exercise = require('../../models/admin/exerciseModel');
 const { UploadClient } = require('@uploadcare/upload-client');
 require('dotenv').config();
 
-// Map type to string
 const typeToString = (type) => {
     switch (type) {
         case 1:
@@ -30,166 +29,133 @@ const uploadToUploadcare = async (file) => {
     }
 };
 
-exports.getAllExercises = (req, res) => {
-    let { page = 1, limit, keyword = '', type } = req.query;
-    limit = limit ? parseInt(limit) : 10;
-    type = type ? parseInt(type) : null;
+exports.getAllExercises = async (req, res) => {
+    let { page = 1, limit = 10, keyword = '', type } = req.query;
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
+    type = type ? parseInt(type, 10) : null;
 
-    Exercise.getAllExercises(page, limit, keyword, type, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        Exercise.countAllExercises(keyword, type, (err, countResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            res.json({
-                total: countResults[0].total,
-                page: parseInt(page),
-                limit,
-                exercises: results.map(exercise => ({
-                    ...exercise,
-                    type_string: typeToString(exercise.type),
-                    media_url: exercise.media_url,
-                    thumbnail_url: exercise.thumbnail_url
-                }))
-            });
+    try {
+        const exercises = await Exercise.getAllExercises(page, limit, keyword, type);
+        const total = await Exercise.countAllExercises(keyword, type);
+
+        res.json({
+            total,
+            page,
+            limit,
+            exercises: exercises.map((exercise) => ({
+                ...exercise,
+                type_string: typeToString(exercise.type),
+                media_url: exercise.media_url,
+                thumbnail_url: exercise.thumbnail_url,
+            })),
         });
-    });
+    } catch (error) {
+        console.error('Error fetching exercises:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
-exports.getExerciseById = (req, res) => {
+exports.getExerciseById = async (req, res) => {
     const { id } = req.params;
-    Exercise.getExerciseById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0) {
+
+    try {
+        const exercise = await Exercise.getExerciseById(id);
+
+        if (!exercise) {
             return res.status(404).json({ error: 'Exercise not found' });
         }
+
         res.json({
-            ...results[0],
-            type_string: typeToString(results[0].type),
-            media_url: results[0].media_url,
-            thumbnail_url: results[0].thumbnail_url
+            ...exercise,
+            type_string: typeToString(exercise.type),
+            media_url: exercise.media_url,
+            thumbnail_url: exercise.thumbnail_url,
         });
-    });
+    } catch (error) {
+        console.error('Error fetching exercise:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
 exports.createExercise = async (req, res) => {
     const { title, description, type } = req.body;
-    let media_url = null;
-    let thumbnail_url = null;
 
     try {
-        // Upload video nếu có
-        if (req.files && req.files.media_url) {
+        let media_url = null;
+        let thumbnail_url = null;
+
+        if (req.files?.media_url) {
             media_url = await uploadToUploadcare(req.files.media_url[0]);
         }
 
-        // Upload ảnh thumbnail nếu có
-        if (req.files && req.files.thumbnail_url) {
+        if (req.files?.thumbnail_url) {
             thumbnail_url = await uploadToUploadcare(req.files.thumbnail_url[0]);
         }
 
-        // Kiểm tra dữ liệu đầu vào
-        const errors = {};
-        if (!title) errors.title = 'Title is required';
-        if (!description) errors.description = 'Description is required';
-        if (!type) errors.type = 'Type is required';
-        if (!media_url) errors.media_url = 'Media URL is required';
-        if (!thumbnail_url) errors.thumbnail_url = 'Thumbnail URL is required';
-
-        if (Object.keys(errors).length > 0) {
-            return res.status(400).json({ errors });
+        if (!title || !description || !type || !media_url || !thumbnail_url) {
+            return res.status(400).json({ error: 'All fields are required' });
         }
 
-        // Tạo dữ liệu bài tập
+        const existingExercise = await Exercise.checkExerciseTitleExists(title);
+        if (existingExercise) {
+            return res.status(400).json({ error: 'Exercise title already exists' });
+        }
+
         const exerciseData = { title, description, type, media_url, thumbnail_url };
+        const exerciseId = await Exercise.createExercise(exerciseData);
 
-        Exercise.checkExerciseTitleExists(title, (err, results) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            if (results.length > 0) {
-                return res.status(400).json({ error: 'Exercise title already exists' });
-            }
-
-            Exercise.createExercise(exerciseData, (err, insertResults) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
-                res.json({ id: insertResults.insertId, media_url, thumbnail_url });
-            });
-        });
+        res.json({ id: exerciseId, media_url, thumbnail_url });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error creating exercise:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 
 exports.updateExercise = async (req, res) => {
     const { id } = req.params;
     const { title, description, type } = req.body;
-    let media_url = null;
-    let thumbnail_url = null;
 
     try {
-        // Upload video nếu có
-        if (req.files && req.files.media_url) {
+        let media_url = null;
+        let thumbnail_url = null;
+
+        if (req.files?.media_url) {
             media_url = await uploadToUploadcare(req.files.media_url[0]);
         }
 
-        // Upload ảnh thumbnail nếu có
-        if (req.files && req.files.thumbnail_url) {
+        if (req.files?.thumbnail_url) {
             thumbnail_url = await uploadToUploadcare(req.files.thumbnail_url[0]);
         }
 
-        // Cập nhật dữ liệu bài tập
-        const exerciseData = {};
-        if (title) exerciseData.title = title;
-        if (description) exerciseData.description = description;
-        if (type) exerciseData.type = type;
-        if (media_url) exerciseData.media_url = media_url;
-        if (thumbnail_url) exerciseData.thumbnail_url = thumbnail_url;
+        const existingExercise = await Exercise.getExerciseById(id);
+        if (!existingExercise) {
+            return res.status(404).json({ error: 'Exercise not found' });
+        }
 
-        Exercise.getExerciseById(id, (err, exerciseResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            if (exerciseResults.length === 0) {
-                return res.status(404).json({ error: 'Exercise not found' });
-            }
+        const exerciseData = { title, description, type, media_url, thumbnail_url };
+        await Exercise.updateExercise(id, exerciseData);
 
-            Exercise.updateExercise(id, exerciseData, (err, updateResults) => {
-                if (err) {
-                    return res.status(500).json({ error: err });
-                }
-                res.json({
-                    message: 'Exercise updated successfully',
-                    media_url,
-                    thumbnail_url,
-                });
-            });
-        });
+        res.json({ message: 'Exercise updated successfully', media_url, thumbnail_url });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error updating exercise:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 
-exports.deleteExercise = (req, res) => {
+exports.deleteExercise = async (req, res) => {
     const { id } = req.params;
-    Exercise.checkIfExerciseExists(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0 || results[0].deleted_at) {
+
+    try {
+        const existingExercise = await Exercise.checkIfExerciseExists(id);
+        if (!existingExercise) {
             return res.status(404).json({ error: 'Exercise not found' });
         }
-        Exercise.deleteExercise(id, (err, deleteResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            res.json({ message: 'Exercise marked as deleted' });
-        });
-    });
+
+        await Exercise.deleteExercise(id);
+        res.json({ message: 'Exercise marked as deleted' });
+    } catch (error) {
+        console.error('Error deleting exercise:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };

@@ -1,26 +1,31 @@
 const db = require('../../config/db');
 
-const saveConversation = (userId, userMessage, botReply, callback) => {
-    const query = 'INSERT INTO conversations (user_id, user_message, bot_reply) VALUES (?, ?, ?)';
-    db.query(query, [userId, userMessage, botReply], (err, result) => {
-        if (err) {
-            return callback(err, null);
-        }
-        callback(null, result);
+const saveConversation = async (userId, userMessage, botReply) => {
+    return await db('conversations').insert({
+        user_id: userId,
+        user_message: userMessage,
+        bot_reply: botReply,
     });
 };
 
-const getConversationsByUserId = (userId, callback) => {
-    const query = 'SELECT * FROM conversations WHERE user_id = ? ORDER BY created_at ASC';
-    db.query(query, [userId], (err, results) => {
-        if (err) {
-            return callback(err, null);
-        }
-        callback(null, results);
-    });
+const getConversationsByUserId = async (userId, limit, offset) => {
+    return await db('conversations')
+        .where({ user_id: userId })
+        .orderBy('created_at', 'asc')
+        .limit(limit)
+        .offset(offset)
+        .select('*');
+};
+
+const countConversationsByUserId = async (userId) => {
+    const result = await db('conversations')
+        .where({ user_id: userId })
+        .count('* as count');
+    return parseInt(result[0].count, 10);
 };
 
 module.exports = {
     saveConversation,
-    getConversationsByUserId
+    getConversationsByUserId,
+    countConversationsByUserId,
 };

@@ -1,42 +1,50 @@
 const db = require('../../config/db');
 
 const Post = {
-    getAllPosts: (callback) => {
-        const query = `
-        SELECT 
-            posts.*,
-            users.username AS username
-        FROM posts
-        JOIN users ON posts.user_id = users.id
-        WHERE posts.deleted_at IS NULL
-    `;
-        db.query(query, callback);
+    getAllPosts: async (limit, offset) => {
+        return await db('posts')
+            .join('users', 'posts.user_id', 'users.id')
+            .whereNull('posts.deleted_at')
+            .select('posts.*', 'users.username as username')
+            .limit(limit)
+            .offset(offset);
     },
 
-    getPostById: (id, callback) => {
-        const query = `
-        SELECT 
-            posts.*,
-            users.username AS username
-        FROM posts
-        JOIN users ON posts.user_id = users.id
-        WHERE posts.id = ? AND posts.deleted_at IS NULL
-    `;
-        db.query(query, [id], callback);
+    countAllPosts: async () => {
+        const result = await db('posts')
+            .whereNull('deleted_at')
+            .count('* as total');
+        return parseInt(result[0].total, 10);
+    },    
+
+    getPostById: async (id) => {
+        return await db('posts')
+            .join('users', 'posts.user_id', 'users.id')
+            .where('posts.id', id)
+            .whereNull('posts.deleted_at')
+            .select('posts.*', 'users.username as username')
+            .first();
     },
 
-    createPost: (postData, callback) => {
-        db.query('INSERT INTO posts SET ?', postData, callback);
+    createPost: async (postData) => {
+        const [id] = await db('posts').insert(postData);
+        return id;
     },
 
-    updatePost: (id, postData, callback) => {
-        db.query('UPDATE posts SET ? WHERE id = ?', [postData, id], callback);
+    updatePost: async (id, postData) => {
+        await db('posts')
+            .where({ id })
+            .whereNull('deleted_at')
+            .update(postData);
+        return await Post.getPostById(id);
     },
 
-    deletePost: (id, callback) => {
-        const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        db.query('UPDATE posts SET deleted_at = ? WHERE id = ?', [deletedAt, id], callback);
-    }
+    deletePost: async (id) => {
+        const deletedAt = new Date();
+        return await db('posts')
+            .where({ id })
+            .update({ deleted_at: deletedAt });
+    },
 };
 
 module.exports = Post;

@@ -3,9 +3,8 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 const bodyParser = require("body-parser");
-const path = require("path");
 require("dotenv").config();
-const db = require("./config/db");
+const knex = require("./config/db");
 
 const app = express();
 const server = http.createServer(app);
@@ -40,7 +39,7 @@ io.on("connection", (socket) => {
     });
 
     // Sending a message
-    socket.on("sendMessage", (data) => {
+    socket.on("sendMessage", async (data) => {
         const { chat_id, sender_id, receiver_id, message } = data;
 
         if (!chat_id || !receiver_id || !message) {
@@ -49,23 +48,17 @@ io.on("connection", (socket) => {
             return;
         }
 
-        // Xử lý receiver_id nếu thiếu
-        const resolvedReceiverId = receiver_id || null;
-
-        const query = `
-      INSERT INTO user_expert_messages (chat_id, sender_id, receiver_id, message)
-      VALUES (?, ?, ?, ?)
-  `;
-
-        db.query(query, [chat_id, sender_id, receiver_id, message], (err, results) => {
-            if (err) {
-                console.error("Database error:", err);
-                socket.emit("error", { message: "Failed to save message" });
-                return;
-            }
+        try {
+            const [newMessageId] = await knex("user_expert_messages").insert({
+                chat_id,
+                sender_id,
+                receiver_id,
+                message,
+                created_at: new Date(),
+            });
 
             const newMessage = {
-                id: results.insertId,
+                id: newMessageId,
                 chat_id,
                 sender_id,
                 receiver_id,
@@ -74,7 +67,10 @@ io.on("connection", (socket) => {
             };
 
             io.to(chat_id).emit("newMessage", newMessage);
-        });
+        } catch (err) {
+            console.error("Database error:", err);
+            socket.emit("error", { message: "Failed to save message" });
+        }
     });
 
     // Client disconnection

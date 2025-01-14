@@ -1,26 +1,36 @@
 const db = require("../../config/db");
 
 const UserExpertMessage = {
-  create: (chat_id, sender_id, receiver_id, message, callback) => {
-    const query = `
-      INSERT INTO user_expert_messages (chat_id, sender_id, receiver_id, message)
-      VALUES (?, ?, ?, ?)
-    `;
-    db.query(query, [chat_id, sender_id, receiver_id, message], callback);
+  create: async (chat_id, sender_id, receiver_id, message) => {
+    const [id] = await db('user_expert_messages').insert({
+      chat_id,
+      sender_id,
+      receiver_id,
+      message,
+    });
+    return id;
   },
 
-  getMessagesByChatId: (chatId, callback) => {
-    const query = `
-      SELECT m.*, 
-             u.username AS sender, 
-             r.username AS receiver
-      FROM user_expert_messages m
-      LEFT JOIN users u ON m.sender_id = u.id
-      LEFT JOIN users r ON m.receiver_id = r.id
-      WHERE m.chat_id = ?
-      ORDER BY m.created_at ASC
-    `;
-    db.query(query, [chatId], callback);
+  getMessagesByChatId: async (chatId, limit, offset) => {
+    return await db('user_expert_messages as m')
+        .leftJoin('users as u', 'm.sender_id', 'u.id')
+        .leftJoin('users as r', 'm.receiver_id', 'r.id')
+        .where('m.chat_id', chatId)
+        .select(
+            'm.*',
+            'u.username as sender',
+            'r.username as receiver'
+        )
+        .orderBy('m.created_at', 'asc')
+        .limit(limit)
+        .offset(offset);
+  },
+
+  countMessagesByChatId: async (chatId) => {
+    const result = await db('user_expert_messages')
+        .where('chat_id', chatId)
+        .count('* as total');
+    return parseInt(result[0].total, 10);
   },
 };
 

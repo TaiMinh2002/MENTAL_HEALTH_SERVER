@@ -4,11 +4,6 @@ const Expert = require('../../models/user/expertModel');
 const User = require('../../models/user/userModel');
 require('dotenv').config();
 
-const getBaseUrl = (req) => {
-    const serverIp = process.env.SERVER_IP || 'localhost';
-    return req.protocol + '://' + serverIp + ':' + process.env.PORT;
-};
-
 const getSpecializationString = (specialization) => {
     switch (specialization) {
         case 1:
@@ -23,79 +18,76 @@ const getSpecializationString = (specialization) => {
             return 'Family & Marriage';
         case 6:
             return 'Art & Music';
+        case 7:
+            return 'Elderly';
         default:
             return 'Unknown';
     }
 };
 
-exports.getAllExperts = (req, res) => {
+exports.getAllExperts = async (req, res) => {
     let { page = 1, limit = 10, keyword = '', specialization } = req.query;
-    limit = limit ? parseInt(limit) : 10;
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
 
     if (!specialization) {
         return res.status(400).json({ error: "Specialization is required" });
     }
 
-    Expert.getAllExperts(page, limit, keyword, parseInt(specialization), (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
+    try {
+        const experts = await Expert.getAllExperts(page, limit, keyword, parseInt(specialization));
 
-        const expertsWithSpecializationString = results.map((expert) => ({
+        const total = await Expert.countAllExperts(keyword, parseInt(specialization));
+
+        const formattedExperts = experts.map((expert) => ({
             ...expert,
             specialization_string: getSpecializationString(expert.specialization),
         }));
 
-        Expert.countAllExperts(keyword, parseInt(specialization), (err, countResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-
-            const total = countResults[0].total;
-            const lastPage = Math.ceil(total / limit);
-
-            res.json({
-                msg: "success",
-                code: 200,
-                data: {
-                    experts: {
-                        data: expertsWithSpecializationString,
-                        total,
-                        per_page: limit,
-                        current_page: parseInt(page),
-                        last_page: lastPage,
-                        has_more_pages: parseInt(page) < lastPage,
-                    },
-                },
-            });
-        });
-    });
-};
-
-exports.getExpertById = (req, res) => {
-    const { id } = req.params;
-
-    Expert.getExpertById(id, (err, results) => {
-        if (err) {
-            console.error("Database error:", err);
-            return res.status(500).json({ error: "Internal server error" });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ error: "Expert not found" });
-        }
-
-        const expert = {
-            ...results[0],
-            specialization_string: getSpecializationString(results[0].specialization)
-        };
+        const lastPage = Math.ceil(total / limit);
 
         res.json({
             msg: "success",
             code: 200,
             data: {
-                expert
-            }
+                experts: {
+                    data: formattedExperts,
+                    total,
+                    per_page: limit,
+                    current_page: page,
+                    last_page: lastPage,
+                    has_more_pages: page < lastPage,
+                },
+            },
         });
-    });
+    } catch (err) {
+        console.error('Error fetching experts:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.getExpertById = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const expert = await Expert.getExpertById(id);
+
+        if (!expert) {
+            return res.status(404).json({ error: 'Expert not found' });
+        }
+
+        const formattedExpert = {
+            ...expert,
+            specialization_string: getSpecializationString(expert.specialization),
+        };
+
+        res.json({
+            msg: "success",
+            code: 200,
+            data: { expert: formattedExpert },
+        });
+    } catch (err) {
+        console.error('Error fetching expert:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };

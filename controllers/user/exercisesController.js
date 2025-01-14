@@ -13,71 +13,70 @@ const typeToString = (type) => {
     }
 };
 
-exports.getAllExercises = (req, res) => {
-    let { page = 1, limit, keyword = '', type } = req.query;
-    limit = limit ? parseInt(limit) : 10;
-    type = type ? parseInt(type) : null;
+exports.getAllExercises = async (req, res) => {
+    let { page = 1, limit = 10, keyword = '', type } = req.query;
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
+    type = type ? parseInt(type, 10) : null;
 
-    Exercise.getAllExercises(page, limit, keyword, type, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        Exercise.countAllExercises(keyword, type, (err, countResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
+    try {
+        const exercises = await Exercise.getAllExercises(page, limit, keyword, type);
 
-            const formattedResults = results.map(exercise => ({
-                ...exercise,
-                type_string: typeToString(exercise.type),
-                media_url: exercise.media_url,
-                thumbnail_url: exercise.thumbnail_url
-            }));
+        const total = await Exercise.countAllExercises(keyword, type);
 
-            const response = {
-                msg: "success",
-                code: 200,
-                data: {
-                    forums: {
-                        data: formattedResults,
-                        total: countResults[0].total,
-                        per_page: limit,
-                        current_page: parseInt(page),
-                        last_page: Math.ceil(countResults[0].total / limit),
-                        has_more_pages: parseInt(page) < Math.ceil(countResults[0].total / limit)
-                    }
-                }
-            };
+        const formattedResults = exercises.map((exercise) => ({
+            ...exercise,
+            type_string: typeToString(exercise.type),
+            media_url: exercise.media_url,
+            thumbnail_url: exercise.thumbnail_url,
+        }));
 
-            res.json(response);
-        });
-    });
+        const response = {
+            msg: "success",
+            code: 200,
+            data: {
+                exercises: {
+                    data: formattedResults,
+                    total,
+                    per_page: limit,
+                    current_page: page,
+                    last_page: Math.ceil(total / limit),
+                    has_more_pages: page < Math.ceil(total / limit),
+                },
+            },
+        };
+
+        res.json(response);
+    } catch (err) {
+        console.error('Error fetching exercises:', err);
+        res.status(500).json({ msg: 'Internal server error', code: 500 });
+    }
 };
 
-exports.getExerciseById = (req, res) => {
+exports.getExerciseById = async (req, res) => {
     const { id } = req.params;
 
-    Exercise.getExerciseById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0) {
+    try {
+        const exercise = await Exercise.getExerciseById(id);
+
+        if (!exercise) {
             return res.status(404).json({ error: 'Exercise not found' });
         }
 
-        const exercise = {
-            ...results[0],
-            type_string: typeToString(results[0].type),
-            media_url: results[0].media_url,
-            thumbnail_url: results[0].thumbnail_url
+        const formattedExercise = {
+            ...exercise,
+            type_string: typeToString(exercise.type),
+            media_url: exercise.media_url,
+            thumbnail_url: exercise.thumbnail_url,
         };
 
         res.json({
             msg: "success",
             code: 200,
-            data: {
-                exercise
-            }
+            data: { exercise: formattedExercise },
         });
-    });
+    } catch (err) {
+        console.error('Error fetching exercise:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };

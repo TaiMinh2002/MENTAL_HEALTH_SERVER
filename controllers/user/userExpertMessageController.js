@@ -1,54 +1,61 @@
 const UserExpertMessage = require("../../models/user/UserExpertMessageModel");
-const db = require("../../config/db");
 
-exports.sendMessage = (req, res) => {
-    const { chat_id, receiver_id, message } = req.query; // Lấy dữ liệu từ query params
-    const sender_id = req.user.id; // Lấy ID của người gửi từ token
-
-    // Kiểm tra bắt buộc chat_id, receiver_id và message
+exports.sendMessage = async (req, res) => {
+    const { chat_id, receiver_id, message } = req.query;
+    const sender_id = req.user.id;
     if (!chat_id || !receiver_id || !message) {
         return res.status(400).json({ error: "chat_id, receiver_id, and message are required" });
     }
 
-    // Lưu tin nhắn vào database
-    UserExpertMessage.create(chat_id, sender_id, receiver_id, message, (err, result) => {
-        if (err) {
-            console.error("Database error:", err);
-            return res.status(500).json({ error: "Internal server error" });
-        }
+    try {
+        const messageId = await UserExpertMessage.create(chat_id, sender_id, receiver_id, message);
 
-        // Trả về thông tin tin nhắn đã lưu
         res.json({
-            messageId: result.insertId,
+            messageId,
             chat_id: parseInt(chat_id),
             sender_id: parseInt(sender_id),
             receiver_id: parseInt(receiver_id),
             message,
-            created_at: new Date().toISOString(), // Lưu dạng UTC ISO
+            created_at: new Date().toISOString(),
         });
-
-    });
+    } catch (err) {
+        console.error("Error creating message:", err.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
 };
 
-exports.getMessages = (req, res) => {
-    const { chatId } = req.query;
+exports.getMessages = async (req, res) => {
+    const { chatId, page = 1, limit = 10 } = req.query;
 
     if (!chatId) {
         return res.status(400).json({ error: "Chat ID is required" });
     }
 
-    console.log("Fetching messages for chatId:", chatId);
+    const parsedPage = parseInt(page, 10);
+    const parsedLimit = parseInt(limit, 10);
+    const offset = (parsedPage - 1) * parsedLimit;
 
-    UserExpertMessage.getMessagesByChatId(chatId, (err, messages) => {
-        if (err) {
-            console.error("Database error:", err);
-            return res.status(500).json({ error: "Internal server error" });
-        }
+    try {
+        const messages = await UserExpertMessage.getMessagesByChatId(chatId, parsedLimit, offset);
 
-        // Bọc danh sách tin nhắn trong một đối tượng JSON
+        const total = await UserExpertMessage.countMessagesByChatId(chatId);
+
         res.json({
-            message: "Conversation history retrieved successfully",
-            data: messages,
+            msg: 'success',
+            code: 200,
+            data: {
+                messages: {
+                    data: messages,
+                    total,
+                    per_page: parsedLimit,
+                    current_page: parsedPage,
+                    last_page: Math.ceil(total / parsedLimit),
+                    has_more_pages: parsedPage < Math.ceil(total / parsedLimit),
+                },
+            },
         });
-    });
+    } catch (err) {
+        console.error("Error fetching messages:", err.message);
+        res.status(500).json({ msg: 'error', code: 500, error: "Internal server error" });
+    }
 };

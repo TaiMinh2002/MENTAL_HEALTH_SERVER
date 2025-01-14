@@ -1,104 +1,77 @@
 const db = require('../../config/db');
-
 const User = {
-  getAllUsers: (page, limit, keyword, callback) => {
+  getAllUsers: async (page, limit, keyword) => {
     const offset = (page - 1) * limit;
-    const query = `SELECT * FROM users WHERE deleted_at IS NULL AND username LIKE ? LIMIT ? OFFSET ?`;
-    const values = [`%${keyword}%`, parseInt(limit), offset];
-    db.query(query, values, (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
+    return await db('users')
+      .whereNull('deleted_at')
+      .andWhere('username', 'like', `%${keyword}%`)
+      .limit(limit)
+      .offset(offset);
   },
-  getUserById: (id) => {
-    return new Promise((resolve, reject) => {
-      const query = 'SELECT * FROM users WHERE id = ? AND deleted_at IS NULL';
-      db.query(query, [id], (err, results) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(results);
-      });
-    });
+
+  getUserById: async (id) => {
+    return await db('users')
+      .where({ id })
+      .whereNull('deleted_at')
+      .first();
   },
-  getUserByEmailOrPhoneNumber: (identifier, callback) => {
-    db.query(
-      'SELECT * FROM USERS WHERE (email = ? OR phone_number = ?) AND deleted_at IS NULL',
-      [identifier, identifier],
-      (err, results) => {
-        if (err) {
-          return callback(err, null);
-        }
-        return callback(null, results);
-      }
-    );
+
+  getUserByEmailOrPhoneNumber: async (identifier) => {
+    return await db('users')
+      .where((qb) => {
+        qb.where('email', identifier).orWhere('phone_number', identifier);
+      })
+      .whereNull('deleted_at')
+      .first();
   },
-  countAllUsers: (keyword, callback) => {
-    const query = `SELECT COUNT(*) AS total FROM users WHERE deleted_at IS NULL AND username LIKE ?`;
-    const value = `%${keyword}%`;
-    db.query(query, [value], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
+
+  countAllUsers: async (keyword) => {
+    const result = await db('users')
+      .whereNull('deleted_at')
+      .andWhere('username', 'like', `%${keyword}%`)
+      .count('* as total');
+    return result[0].total;
   },
-  createUser: (userData, callback) => {
-    db.query('INSERT INTO USERS SET ?', userData, (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
+
+  createUser: async (userData) => {
+    const [id] = await db('users').insert(userData);
+    return id;
   },
-  updateUser: (id, userData) => {
-    return new Promise((resolve, reject) => {
-      const query = 'UPDATE users SET ? WHERE id = ? AND deleted_at IS NULL';
-      db.query(query, [userData, id], (err, results) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(results);
-      });
-    });
+
+  updateUser: async (id, userData) => {
+    return await db('users')
+      .where({ id })
+      .whereNull('deleted_at')
+      .update(userData);
   },
-  deleteUser: (id, callback) => {
-    const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    db.query('UPDATE users SET deleted_at = ? WHERE id = ?', [deletedAt, id], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
+
+  deleteUser: async (id) => {
+    const deletedAt = new Date();
+    return await db('users')
+      .where({ id })
+      .update({ deleted_at: deletedAt });
   },
-  checkIfUserExists: (id, callback) => {
-    db.query('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', [id], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
+
+  checkIfUserExists: async (id) => {
+    return await db('users')
+      .where({ id })
+      .whereNull('deleted_at')
+      .first();
   },
-  pauseUser: (id, callback) => {
-    const status = 2;
-    db.query('UPDATE users SET status = ? WHERE id = ? AND deleted_at IS NULL', [status, id], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
+
+  pauseUser: async (id) => {
+    return await db('users')
+      .where({ id })
+      .whereNull('deleted_at')
+      .update({ status: 2 });
   },
-  updateUserByExpertId: (expertId, userData, callback) => {
-    const query = 'UPDATE users SET ? WHERE expert_id = ? AND deleted_at IS NULL';
-    db.query(query, [userData, expertId], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
-      return callback(null, results);
-    });
-  }
+
+  updateUserByExpertId: async (expertId, userData) => {
+    return await db('users')
+      .where({ expert_id: expertId })
+      .whereNull('deleted_at')
+      .update(userData);
+  },
 };
 
 module.exports = User;

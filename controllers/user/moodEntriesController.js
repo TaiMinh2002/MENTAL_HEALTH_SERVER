@@ -1,118 +1,113 @@
 const MoodEntry = require('../../models/user/moodEntryModel');
 
-exports.getAllMoodEntries = (req, res) => {
+exports.getAllMoodEntries = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
-    const offset = (page > 0 ? page - 1 : 0) * limit;
+    const parsedPage = parseInt(page, 10);
+    const parsedLimit = parseInt(limit, 10);
+    const offset = (parsedPage - 1) * parsedLimit;
 
-    MoodEntry.getAllMoodEntries(limit, offset, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: 'Failed to fetch mood entries' });
-        }
+    try {
+        const moodEntries = await MoodEntry.getAllMoodEntries(parsedLimit, offset);
 
-        MoodEntry.countAllMoodEntries((err, countResults) => {
-            if (err) {
-                return res.status(500).json({ error: 'Failed to count mood entries' });
-            }
+        const total = await MoodEntry.countAllMoodEntries();
 
-            const total = countResults[0].total;
-            const lastPage = Math.ceil(total / limit);
-
-            res.json({
-                msg: "success",
-                code: 200,
-                data: {
-                    mood_entries: {
-                        data: results,
-                        total,
-                        per_page: limit,
-                        current_page: parseInt(page),
-                        last_page: lastPage,
-                        has_more_pages: parseInt(page) < lastPage,
-                    },
-                },
-            });
-        });
-    });
-};
-
-exports.getMoodEntryById = (req, res) => {
-    const { id } = req.params;
-
-    MoodEntry.getMoodEntryById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: 'Failed to fetch mood entry' });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({ error: 'Mood entry not found' });
-        }
-
-        const moodEntry = results[0];
+        const lastPage = Math.ceil(total / parsedLimit);
+        const hasMorePages = parsedPage < lastPage;
 
         res.json({
             msg: "success",
             code: 200,
             data: {
-                mood_entry: moodEntry
-            }
+                mood_entries: {
+                    data: moodEntries,
+                    total,
+                    per_page: parsedLimit,
+                    current_page: parsedPage,
+                    last_page: lastPage,
+                    has_more_pages: hasMorePages,
+                },
+            },
         });
-    });
-};
-
-exports.createMoodEntry = (req, res) => {
-    try {
-        const { note } = req.body;
-        const user_id = req.user?.id;
-        const date = new Date().toISOString().slice(0, 10);
-        if (!user_id) {
-            return res.status(400).json({ error: 'User ID is required' });
-        }
-
-        const moodEntryData = { user_id, note, date };
-
-        MoodEntry.createMoodEntry(moodEntryData, (err, result) => {
-            if (err) {
-                console.error('Database Error:', err);
-                return res.status(500).json({ error: 'Failed to create mood entry' });
-            }
-
-            if (!result) {
-                return res.status(500).json({ error: 'No result returned from database' });
-            }
-
-            const response = {
-                note: result.note || moodEntryData.note,
-                date: result.date || moodEntryData.date
-            };
-            res.json(response);
-        });
-    } catch (error) {
-        console.error('Unexpected Error:', error);
-        res.status(500).json({ error: 'An unexpected error occurred' });
+    } catch (err) {
+        console.error('Error fetching mood entries:', err);
+        res.status(500).json({ error: 'Failed to fetch mood entries' });
     }
 };
 
-exports.updateMoodEntry = (req, res) => {
+exports.getMoodEntryById = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const moodEntry = await MoodEntry.getMoodEntryById(id);
+
+        if (!moodEntry) {
+            return res.status(404).json({ error: 'Mood entry not found' });
+        }
+
+        res.json({
+            msg: "success",
+            code: 200,
+            data: { mood_entry: moodEntry },
+        });
+    } catch (err) {
+        console.error('Error fetching mood entry:', err);
+        res.status(500).json({ error: 'Failed to fetch mood entry' });
+    }
+};
+
+exports.createMoodEntry = async (req, res) => {
+    const { note } = req.query;
+    const user_id = req.user?.id;
+    const date = new Date().toISOString().slice(0, 10);
+
+    if (!user_id) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    try {
+        const moodEntryData = { user_id, note, date };
+        const newMoodEntry = await MoodEntry.createMoodEntry(moodEntryData);
+
+        res.json({
+            msg: "success",
+            code: 200,
+            data: { mood_entry: newMoodEntry },
+        });
+    } catch (err) {
+        console.error('Error creating mood entry:', err);
+        res.status(500).json({ error: 'Failed to create mood entry' });
+    }
+};
+
+exports.updateMoodEntry = async (req, res) => {
     const { id } = req.params;
     const { mood, note } = req.body;
     const user_id = req.user.id;
     const date = new Date().toISOString().slice(0, 10);
 
-    const moodEntryData = { user_id, mood, note, date };
-    MoodEntry.updateMoodEntry(id, moodEntryData, (err, result) => {
-        if (err) {
-            return res.status(500).json({ error: 'Failed to update mood entry' });
-        }
-        res.json(result);
-    });
+    try {
+        const moodEntryData = { user_id, mood, note, date };
+        const updatedMoodEntry = await MoodEntry.updateMoodEntry(id, moodEntryData);
+
+        res.json({
+            msg: "success",
+            code: 200,
+            data: { mood_entry: updatedMoodEntry },
+        });
+    } catch (err) {
+        console.error('Error updating mood entry:', err);
+        res.status(500).json({ error: 'Failed to update mood entry' });
+    }
 };
 
-exports.deleteMoodEntry = (req, res) => {
+exports.deleteMoodEntry = async (req, res) => {
     const { id } = req.params;
-    MoodEntry.deleteMoodEntry(id, (err) => {
-        if (err) {
-            return res.status(500).json({ error: 'Failed to delete mood entry' });
-        }
-        res.json({ message: 'Mood entry marked as deleted' });
-    });
+
+    try {
+        await MoodEntry.deleteMoodEntry(id);
+        res.json({ msg: "success", code: 200, message: "Mood entry marked as deleted" });
+    } catch (err) {
+        console.error('Error deleting mood entry:', err);
+        res.status(500).json({ error: 'Failed to delete mood entry' });
+    }
 };

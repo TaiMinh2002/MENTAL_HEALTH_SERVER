@@ -19,24 +19,15 @@ async function runSeeder() {
             stress: null,
             email_verified_at: null,
             created_at: new Date(),
-            updated_at: new Date()
+            updated_at: new Date(),
         };
 
-        const query = `
-            INSERT INTO users (avatar, username, email, password, status, role, gender, age, mood, sleep, stress, email_verified_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-
-        db.query(query, Object.values(adminUser), (error, results) => {
-            if (error) {
-                throw error;
-            }
-            console.log('Admin user created successfully:', results.insertId);
-        });
+        const [insertId] = await db('users').insert(adminUser);
+        console.log('Admin user created successfully:', insertId);
     } catch (error) {
         console.error('Error running seeder:', error);
     } finally {
-        db.end();
+        await db.destroy();
     }
 }
 

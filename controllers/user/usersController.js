@@ -4,11 +4,6 @@ const User = require('../../models/user/userModel');
 const { UploadClient } = require('@uploadcare/upload-client');
 require('dotenv').config();
 
-const getBaseUrl = (req) => {
-    const serverIp = process.env.SERVER_IP || 'localhost';
-    return req.protocol + '://' + serverIp + ':' + process.env.PORT;
-};
-
 const getStatusString = (status) => {
     switch (status) {
         case 1:
@@ -107,37 +102,34 @@ const uploadToUploadcare = async (file) => {
     }
 };
 
-exports.getAllUsers = (req, res) => {
+exports.getAllUsers = async (req, res) => {
     const { page = 1, limit = 10, keyword = '' } = req.query;
-    User.getAllUsers(page, limit, keyword, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        User.countAllUsers(keyword, (err, countResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            const total = countResults[0].total;
 
-            const usersWithStrings = results.map(user => ({
-                ...user,
-                status_string: getStatusString(user.status),
-                sleep_string: getSleepString(user.sleep),
-                stress_string: getStressString(user.stress),
-                mood_string: getMoodString(user.mood),
-                gender_string: getGenderString(user.gender),
-                is_professional_request_string: getProfessionalRequestString(user.is_professional_request),
-            }));
+    try {
+        const users = await User.getAllUsers(parseInt(page), parseInt(limit), keyword);
+        const total = await User.countAllUsers(keyword);
 
-            res.json({
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                total_page: Math.ceil(total / limit),
-                users: usersWithStrings,
-            });
+        const usersWithStrings = users.map(user => ({
+            ...user,
+            status_string: getStatusString(user.status),
+            sleep_string: getSleepString(user.sleep),
+            stress_string: getStressString(user.stress),
+            mood_string: getMoodString(user.mood),
+            gender_string: getGenderString(user.gender),
+            is_professional_request_string: getProfessionalRequestString(user.is_professional_request),
+        }));
+
+        res.json({
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            total_page: Math.ceil(total / limit),
+            users: usersWithStrings,
         });
-    });
+    } catch (err) {
+        console.error('Error fetching users:', err.message);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
 };
 
 exports.getUserById = async (req, res) => {
@@ -149,12 +141,12 @@ exports.getUserById = async (req, res) => {
     }
 
     try {
-        const results = await User.getUserById(id);
-        if (results.length === 0) {
+        const user = await User.getUserById(id);
+
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const user = results[0];
         user.status_string = getStatusString(user.status);
         user.sleep_string = getSleepString(user.sleep);
         user.stress_string = getStressString(user.stress);
@@ -164,6 +156,7 @@ exports.getUserById = async (req, res) => {
 
         res.json(user);
     } catch (err) {
+        console.error('Error fetching user:', err.message);
         res.status(500).json({ error: 'Failed to retrieve user' });
     }
 };
@@ -190,97 +183,77 @@ exports.updateUser = async (req, res) => {
     }
 
     const userData = {};
-    if (username) {
-        userData.username = username;
-    }
+    if (username) userData.username = username;
     if (password) {
         if (!validator.isStrongPassword(password, { minLength: 8 })) {
             return res.status(400).json({ error: 'Password must be at least 8 characters long and meet other criteria' });
         }
-        const hash = await bcrypt.hash(password, 10);
-        userData.password = hash;
+        userData.password = await bcrypt.hash(password, 10);
     }
-    if (avatar) {
-        userData.avatar = avatar;
-    }
-    if (age) {
-        userData.age = age;
-    }
-    if (sleep) {
-        userData.sleep = sleep;
-    }
-    if (stress) {
-        userData.stress = stress;
-    }
-    if (mood) {
-        userData.mood = mood;
-    }
-    if (gender) {
-        userData.gender = gender;
-    }
-    if (is_professional_request) {
-        userData.is_professional_request = is_professional_request;
-    }
+    if (avatar) userData.avatar = avatar;
+    if (age) userData.age = age;
+    if (sleep) userData.sleep = sleep;
+    if (stress) userData.stress = stress;
+    if (mood) userData.mood = mood;
+    if (gender) userData.gender = gender;
+    if (is_professional_request) userData.is_professional_request = is_professional_request;
 
     try {
         const result = await User.updateUser(id, userData);
-        if (result.affectedRows === 0) {
+        if (result === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
 
         const updatedUser = await User.getUserById(id);
-        if (updatedUser.length === 0) {
-            return res.status(404).json({ error: 'User not found after update' });
-        }
 
         res.json({
             msg: "success",
             code: 200,
             data: {
-                user: updatedUser[0]
-            }
+                user: updatedUser,
+            },
         });
     } catch (err) {
+        console.error('Error updating user:', err.message);
         res.status(500).json({ error: 'Failed to update user' });
     }
 };
 
-exports.deleteUser = (req, res) => {
+exports.deleteUser = async (req, res) => {
     const { id } = req.params;
-    User.checkIfUserExists(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0 || results[0].deleted_at) {
+
+    try {
+        const user = await User.checkIfUserExists(id);
+
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-        User.deleteUser(id, (err, results) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            res.json({ message: 'User marked as deleted' });
-        });
-    });
+
+        await User.deleteUser(id);
+        res.json({ message: 'User marked as deleted' });
+    } catch (err) {
+        console.error('Error deleting user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
 };
 
-exports.pauseUser = (req, res) => {
+exports.pauseUser = async (req, res) => {
     const { id } = req.params;
 
-    User.getUserById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0) {
+    try {
+        const user = await User.getUserById(id);
+
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const userData = { status: 2 };
-
-        User.updateUser(id, userData, (err, updateResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            res.json({ message: 'User account paused successfully', status_string: 'Tạm dừng' });
+        await User.pauseUser(id);
+        res.json({
+            message: 'User account paused successfully',
+            status_string: 'Tạm dừng',
         });
-    });
+    } catch (err) {
+        console.error('Error pausing user:', err.message);
+        res.status(500).json({ error: 'Failed to pause user' });
+    }
 };

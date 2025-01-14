@@ -1,13 +1,21 @@
 const bcrypt = require('bcryptjs');
-const validator = require('validator');
 const Expert = require('../../models/admin/expertModel');
 const User = require('../../models/user/userModel');
 const { UploadClient } = require('@uploadcare/upload-client');
 require('dotenv').config();
 
-const getBaseUrl = (req) => {
-    const serverIp = process.env.SERVER_IP || 'localhost';
-    return req.protocol + '://' + serverIp + ':' + process.env.PORT;
+const uploadToUploadcare = async (file) => {
+    try {
+        const client = new UploadClient({ publicKey: process.env.UPLOADCARE_PUBLIC_KEY });
+        const response = await client.uploadFile(file.buffer, {
+            fileName: file.originalname,
+            contentType: file.mimetype,
+        });
+        return response.cdnUrl;
+    } catch (error) {
+        console.error('Error uploading to Uploadcare:', error.message);
+        throw new Error('Error uploading file to Uploadcare');
+    }
 };
 
 const getSpecializationString = (specialization) => {
@@ -24,124 +32,82 @@ const getSpecializationString = (specialization) => {
             return 'Family & Marriage';
         case 6:
             return 'Art & Music';
+        case 7:
+            return 'Elderly';
         default:
             return 'Unknown';
     }
 };
 
-const uploadToUploadcare = async (file) => {
+exports.getAllExperts = async (req, res) => {
+    let { page = 1, limit = 10, keyword = '' } = req.query;
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
+
     try {
-        const client = new UploadClient({ publicKey: process.env.UPLOADCARE_PUBLIC_KEY });
-        const response = await client.uploadFile(file.buffer, {
-            fileName: file.originalname,
-            contentType: file.mimetype,
-        });
-        return response.cdnUrl;
+        const experts = await Expert.getAllExperts(page, limit, keyword);
+        const total = await Expert.countAllExperts(keyword);
+
+        const expertsWithSpecialization = experts.map(expert => ({
+            ...expert,
+            specialization_string: getSpecializationString(expert.specialization),
+        }));
+
+        res.json({ page, limit, total, experts: expertsWithSpecialization });
     } catch (error) {
-        console.error('Error uploading to Uploadcare:', error.message);
-        throw new Error('Error uploading file to Uploadcare');
+        console.error('Error fetching experts:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 
-exports.getAllExperts = (req, res) => {
-    let { page = 1, limit, keyword = '' } = req.query;
-    limit = limit ? parseInt(limit) : 10;
-
-    Expert.getAllExperts(page, limit, keyword, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-
-        const expertsWithSpecializationString = results.map((expert) => ({
-            ...expert,
-            avatar: expert.avatar || null,
-        }));
-
-        Expert.countAllExperts(keyword, (err, countResults) => {
-            if (err) {
-                return res.status(500).json({ error: err });
-            }
-            res.json({
-                page: parseInt(page),
-                limit,
-                total: countResults[0].total,
-                experts: expertsWithSpecializationString,
-            });
-        });
-    });
-};
-
-exports.getExpertById = (req, res) => {
+exports.getExpertById = async (req, res) => {
     const { id } = req.params;
-    Expert.getExpertById(id, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err });
-        }
-        if (results.length === 0) {
+
+    try {
+        const expert = await Expert.getExpertById(id);
+        if (!expert) {
             return res.status(404).json({ error: 'Expert not found' });
         }
-        res.json(results[0]);
-    });
+        res.json(expert);
+    } catch (error) {
+        console.error('Error fetching expert:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
 exports.createExpert = async (req, res) => {
     const { name, specialization, bio, contact_info, phone_number } = req.body;
     let avatar = null;
 
-    // Xử lý upload avatar
-    if (req.files && req.files.avatar) {
-        try {
-            avatar = await uploadToUploadcare(req.files.avatar[0]);
-        } catch (error) {
-            return res.status(500).json({ error: 'Error uploading avatar to Uploadcare' });
-        }
-    }
-
-    // Kiểm tra dữ liệu đầu vào
-    const errors = {};
-    if (!name) errors.name = 'Name is required';
-    if (!specialization) errors.specialization = 'Specialization is required';
-    if (!bio) errors.bio = 'Bio is required';
-    if (!contact_info) errors.contact_info = 'Contact info is required';
-    if (!phone_number) errors.phone_number = 'Phone number is required';
-
-    if (Object.keys(errors).length > 0) {
-        return res.status(400).json({ errors });
-    }
-
-    const expertData = { name, specialization, bio, contact_info, phone_number, avatar };
-
     try {
-        Expert.checkPhoneNumberExists(phone_number, (err, results) => {
-            if (err) return res.status(500).json({ error: err });
-            if (results.length > 0) return res.status(400).json({ error: 'Phone number already exists' });
+        if (req.files?.avatar) {
+            avatar = await uploadToUploadcare(req.files.avatar[0]);
+        }
 
-            Expert.createExpert(expertData, async (err, insertResults) => {
-                if (err) return res.status(500).json({ error: err });
+        const existingPhoneNumber = await Expert.checkPhoneNumberExists(phone_number);
+        if (existingPhoneNumber) {
+            return res.status(400).json({ error: 'Phone number already exists' });
+        }
 
-                const password = await bcrypt.hash('Mental@2024', 10);
-                const userData = {
-                    expert_id: insertResults.insertId,
-                    avatar,
-                    phone_number,
-                    username: name,
-                    password,
-                    role: 3,
-                    email_verified_at: new Date(),
-                };
+        const expertData = { name, specialization, bio, contact_info, phone_number, avatar };
+        const expertId = await Expert.createExpert(expertData);
 
-                User.createUser(userData, (err, userResult) => {
-                    if (err) return res.status(500).json({ error: 'Failed to create user for expert' });
-                    res.json({
-                        expertId: insertResults.insertId,
-                        userId: userResult.insertId,
-                        avatar,
-                    });
-                });
-            });
-        });
+        const password = await bcrypt.hash('Mental@2024', 10);
+        const userData = {
+            expert_id: expertId,
+            avatar,
+            phone_number,
+            username: name,
+            password,
+            role: 3,
+            email_verified_at: new Date(),
+        };
+
+        const userId = await User.createUser(userData);
+        res.json({ expertId, userId, avatar });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error creating expert:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 
@@ -150,41 +116,39 @@ exports.updateExpert = async (req, res) => {
     const { name, specialization, bio, contact_info, phone_number } = req.body;
     let avatar = null;
 
-    // Xử lý upload avatar
-    if (req.files && req.files.avatar) {
-        try {
-            avatar = await uploadToUploadcare(req.files.avatar[0]);
-        } catch (error) {
-            return res.status(500).json({ error: 'Error uploading avatar to Uploadcare' });
-        }
-    }
-
-    const expertData = { name, specialization, bio, contact_info, phone_number, avatar };
-
     try {
-        Expert.getExpertById(id, (err, expertResults) => {
-            if (err) return res.status(500).json({ error: err });
-            if (expertResults.length === 0) return res.status(404).json({ error: 'Expert not found' });
+        if (req.files?.avatar) {
+            avatar = await uploadToUploadcare(req.files.avatar[0]);
+        }
 
-            Expert.updateExpert(id, expertData, (err, updateResults) => {
-                if (err) return res.status(500).json({ error: err });
-                res.json({ message: 'Expert updated successfully', avatar });
-            });
-        });
+        const expert = await Expert.getExpertById(id);
+        if (!expert) {
+            return res.status(404).json({ error: 'Expert not found' });
+        }
+
+        const expertData = { name, specialization, bio, contact_info, phone_number, avatar };
+        await Expert.updateExpert(id, expertData);
+
+        res.json({ message: 'Expert updated successfully', avatar });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error updating expert:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 
-exports.deleteExpert = (req, res) => {
+exports.deleteExpert = async (req, res) => {
     const { id } = req.params;
-    Expert.checkIfExpertExists(id, (err, results) => {
-        if (err) return res.status(500).json({ error: err });
-        if (results.length === 0 || results[0].deleted_at) return res.status(404).json({ error: 'Expert not found' });
 
-        Expert.deleteExpert(id, (err) => {
-            if (err) return res.status(500).json({ error: err });
-            res.json({ message: 'Expert marked as deleted' });
-        });
-    });
+    try {
+        const expert = await Expert.checkIfExpertExists(id);
+        if (!expert) {
+            return res.status(404).json({ error: 'Expert not found' });
+        }
+
+        await Expert.deleteExpert(id);
+        res.json({ message: 'Expert marked as deleted' });
+    } catch (error) {
+        console.error('Error deleting expert:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };

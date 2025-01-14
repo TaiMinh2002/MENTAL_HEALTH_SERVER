@@ -1,22 +1,36 @@
 const db = require('../../config/db');
 
 const Appointment = {
-    getAllAppointments: (callback) => {
-        db.query('SELECT * FROM appointments WHERE deleted_at IS NULL', callback);
+    getAllAppointments: async () => {
+        return await db('appointments')
+            .whereNull('deleted_at');
     },
-    getAppointmentById: (id, callback) => {
-        db.query('SELECT * FROM appointments WHERE id = ? AND deleted_at IS NULL', [id], callback);
+
+    getAppointmentById: async (id) => {
+        return await db('appointments')
+            .where({ id })
+            .whereNull('deleted_at')
+            .first();
     },
-    createAppointment: (appointmentData, callback) => {
-        db.query('INSERT INTO appointments SET ?', appointmentData, callback);
+
+    createAppointment: async (appointmentData) => {
+        const [id] = await db('appointments').insert(appointmentData);
+        return id;
     },
-    updateAppointment: (id, appointmentData, callback) => {
-        db.query('UPDATE appointments SET ? WHERE id = ?', [appointmentData, id], callback);
+
+    updateAppointment: async (id, appointmentData) => {
+        await db('appointments')
+            .where({ id })
+            .whereNull('deleted_at')
+            .update(appointmentData);
     },
-    deleteAppointment: (id, callback) => {
-        const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        db.query('UPDATE appointments SET deleted_at = ? WHERE id = ?', [deletedAt, id], callback);
-    }
+
+    deleteAppointment: async (id) => {
+        const deletedAt = new Date();
+        await db('appointments')
+            .where({ id })
+            .update({ deleted_at: deletedAt });
+    },
 };
 
 module.exports = Appointment;

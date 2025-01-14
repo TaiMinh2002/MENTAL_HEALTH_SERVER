@@ -1,36 +1,34 @@
 const db = require('../../config/db');
 
 const Expert = {
-    getAllExperts: (page, limit, keyword, specialization, callback) => {
+    getAllExperts: async (page, limit, keyword, specialization) => {
         const offset = (page - 1) * limit;
-        const query = `SELECT * FROM experts WHERE deleted_at IS NULL AND name LIKE ? AND specialization = ? LIMIT ? OFFSET ?`;
-        const values = [`%${keyword}%`, specialization, parseInt(limit), offset];
-        db.query(query, values, callback);
+        return await db('experts')
+            .whereNull('deleted_at')
+            .andWhere('name', 'like', `%${keyword}%`)
+            .andWhere('specialization', specialization)
+            .limit(limit)
+            .offset(offset)
+            .select('*');
+    },    
+
+    getExpertById: async (id) => {
+        return await db('experts as e')
+            .leftJoin('users as u', 'u.expert_id', 'e.id')
+            .where('e.id', id)
+            .whereNull('e.deleted_at')
+            .select('e.*', 'u.id as user_id')
+            .first();
     },
 
-    getExpertById: (id, callback) => {
-        const query = `
-        SELECT 
-            e.*, 
-            u.id AS user_id 
-        FROM 
-            experts e
-        LEFT JOIN 
-            users u 
-        ON 
-            u.expert_id = e.id
-        WHERE 
-            e.id = ? AND e.deleted_at IS NULL
-    `;
-
-        db.query(query, [id], callback);
-    },
-
-
-    countAllExperts: (keyword, specialization, callback) => {
-        const query = `SELECT COUNT(*) AS total FROM experts WHERE deleted_at IS NULL AND name LIKE ? AND specialization = ?`;
-        const values = [`%${keyword}%`, specialization];
-        db.query(query, values, callback);
+    countAllExperts: async (keyword, specialization) => {
+        const result = await db('experts')
+            .whereNull('deleted_at')
+            .andWhere('name', 'like', `%${keyword}%`)
+            .andWhere('specialization', specialization)
+            .count('* as total');
+    
+        return parseInt(result[0].total, 10);
     },
 };
 

@@ -1,66 +1,74 @@
 const db = require('../../config/db');
 
 const Exercise = {
-    // Lấy danh sách bài tập với phân trang, tìm kiếm và lọc theo type
-    getAllExercises: (page, limit, keyword, type, callback) => {
+    getAllExercises: async (page, limit, keyword, type) => {
         const offset = (page - 1) * limit;
-        let query = 'SELECT * FROM exercises WHERE deleted_at IS NULL AND title LIKE ?';
-        const values = [`%${keyword}%`];
+
+        let query = db('exercises')
+            .whereNull('deleted_at')
+            .andWhere('title', 'like', `%${keyword}%`);
 
         if (type) {
-            query += ' AND type = ?';
-            values.push(type);
+            query = query.andWhere('type', type);
         }
 
-        query += ' LIMIT ? OFFSET ?';
-        values.push(parseInt(limit), offset);
-
-        db.query(query, values, callback);
+        return await query
+            .limit(limit)
+            .offset(offset)
+            .select('*');
     },
 
-    // Lấy thông tin bài tập theo ID
-    getExerciseById: (id, callback) => {
-        db.query('SELECT * FROM exercises WHERE id = ? AND deleted_at IS NULL', [id], callback);
+    getExerciseById: async (id) => {
+        return await db('exercises')
+            .where({ id })
+            .whereNull('deleted_at')
+            .first();
     },
 
-    // Đếm tổng số bài tập theo keyword và type
-    countAllExercises: (keyword, type, callback) => {
-        let query = 'SELECT COUNT(*) AS total FROM exercises WHERE deleted_at IS NULL AND title LIKE ?';
-        const values = [`%${keyword}%`];
+    countAllExercises: async (keyword, type) => {
+        let query = db('exercises')
+            .whereNull('deleted_at')
+            .andWhere('title', 'like', `%${keyword}%`);
 
         if (type) {
-            query += ' AND type = ?';
-            values.push(type);
+            query = query.andWhere('type', type);
         }
 
-        db.query(query, values, callback);
+        const result = await query.count('* as total');
+        return result[0].total;
     },
 
-    // Tạo mới bài tập
-    createExercise: (exerciseData, callback) => {
-        db.query('INSERT INTO exercises SET ?', exerciseData, callback);
+    createExercise: async (exerciseData) => {
+        const [id] = await db('exercises').insert(exerciseData);
+        return id;
     },
 
-    // Cập nhật bài tập
-    updateExercise: (id, exerciseData, callback) => {
-        db.query('UPDATE exercises SET ? WHERE id = ?', [exerciseData, id], callback);
+    updateExercise: async (id, exerciseData) => {
+        return await db('exercises')
+            .where({ id })
+            .whereNull('deleted_at')
+            .update(exerciseData);
     },
 
-    // Xóa bài tập (đánh dấu deleted_at)
-    deleteExercise: (id, callback) => {
-        const deletedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        db.query('UPDATE exercises SET deleted_at = ? WHERE id = ?', [deletedAt, id], callback);
+    deleteExercise: async (id) => {
+        const deletedAt = new Date();
+        return await db('exercises')
+            .where({ id })
+            .update({ deleted_at: deletedAt });
     },
 
-    // Kiểm tra tiêu đề bài tập có tồn tại
-    checkExerciseTitleExists: (title, callback) => {
-        db.query('SELECT * FROM exercises WHERE title = ?', [title], callback);
+    checkExerciseTitleExists: async (title) => {
+        return await db('exercises')
+            .where({ title })
+            .first();
     },
 
-    // Kiểm tra bài tập có tồn tại
-    checkIfExerciseExists: (id, callback) => {
-        db.query('SELECT * FROM exercises WHERE id = ?', [id], callback);
-    }
+    checkIfExerciseExists: async (id) => {
+        return await db('exercises')
+            .where({ id })
+            .whereNull('deleted_at')
+            .first();
+    },
 };
 
 module.exports = Exercise;
