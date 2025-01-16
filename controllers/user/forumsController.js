@@ -17,14 +17,14 @@ const uploadToUploadcare = async (file) => {
 };
 
 exports.getAllForums = async (req, res) => {
-    const { page = 1, limit = 10, keyword = '' } = req.query;
+    const { page = 1, limit = 10, keyword = '', is_joined } = req.query;
     const offset = (page - 1) * limit;
     const user_id = req.user.id;
 
     try {
-        const forums = await Forum.getAllForums(user_id, keyword, parseInt(limit), offset);
+        const forums = await Forum.getAllForums(user_id, keyword, parseInt(limit), offset, is_joined);
 
-        const total = await Forum.countAllForums(user_id, keyword);
+        const total = await Forum.countAllForums(user_id, keyword, is_joined);
 
         res.json({
             msg: 'success',

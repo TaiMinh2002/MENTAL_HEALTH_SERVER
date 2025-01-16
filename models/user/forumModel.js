@@ -1,22 +1,27 @@
 const db = require('../../config/db');
 
 const Forum = {
-  getAllForums: async (user_id, keyword, limit, offset) => {
-    return await db('forums')
-        .join('users', 'forums.created_user_id', 'users.id')
-        .leftJoin('forum_members', function () {
-            this.on('forums.id', 'forum_members.forum_id')
-                .andOn('forum_members.user_id', '=', user_id);
-        })
-        .whereNull('forums.deleted_at')
-        .andWhere('forums.title', 'like', `%${keyword}%`)
-        .select(
-            'forums.*',
-            'users.username as created_user_name',
-            db.raw('CASE WHEN forum_members.user_id IS NOT NULL THEN true ELSE false END AS is_joined')
-        )
-        .limit(limit)
-        .offset(offset);
+  getAllForums: async (user_id, keyword, limit, offset, is_joined) => {
+    let query = db('forums')
+      .join('users', 'forums.created_user_id', 'users.id')
+      .leftJoin('forum_members', function () {
+        this.on('forums.id', 'forum_members.forum_id')
+          .andOn('forum_members.user_id', '=', user_id);
+      })
+      .whereNull('forums.deleted_at')
+      .andWhere('forums.title', 'like', `%${keyword}%`)
+      .select(
+        'forums.*',
+        'users.username as created_user_name',
+        db.raw('CASE WHEN forum_members.user_id IS NOT NULL THEN true ELSE false END AS is_joined')
+      )
+      .limit(limit)
+      .offset(offset);
+    if (is_joined !== undefined) {
+      query = query.andWhere(db.raw('CASE WHEN forum_members.user_id IS NOT NULL THEN true ELSE false END'), is_joined === 'true');
+    }
+
+    return await query;
   },
 
   getForumWithPosts: async (id) => {
@@ -94,16 +99,21 @@ const Forum = {
       .decrement('member_count', 1);
   },
 
-  countAllForums: async (user_id, keyword) => {
-    const result = await db('forums')
-        .leftJoin('forum_members', function () {
-            this.on('forums.id', 'forum_members.forum_id')
-                .andOn('forum_members.user_id', '=', user_id);
-        })
-        .whereNull('forums.deleted_at')
-        .andWhere('forums.title', 'like', `%${keyword}%`)
-        .count('* as total');
-    return parseInt(result[0].total, 10);
+  countAllForums: async (user_id, keyword, is_joined) => {
+    let query = db('forums')
+      .leftJoin('forum_members', function () {
+        this.on('forums.id', 'forum_members.forum_id')
+          .andOn('forum_members.user_id', '=', user_id);
+      })
+      .whereNull('forums.deleted_at')
+      .andWhere('forums.title', 'like', `%${keyword}%`);
+
+    if (is_joined !== undefined) {
+      query = query.andWhere(db.raw('CASE WHEN forum_members.user_id IS NOT NULL THEN true ELSE false END'), is_joined === 'true');
+    }
+
+    const queryResult = await query.count('* as total');
+    return parseInt(queryResult[0].total, 10);
   },
 
   incrementMemberCount: async (forum_id) => {

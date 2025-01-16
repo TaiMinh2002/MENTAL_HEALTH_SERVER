@@ -39,14 +39,21 @@ const UserExpertChat = {
                 'e.avatar as expert_avatar',
                 'c.created_at',
                 db.raw(`
-                    (SELECT m.message 
-                     FROM user_expert_messages m 
-                     WHERE m.chat_id = c.id 
-                     ORDER BY m.created_at DESC 
-                     LIMIT 1) AS latest_message
-                `)
+                (SELECT m.message 
+                 FROM user_expert_messages m 
+                 WHERE m.chat_id = c.id 
+                 ORDER BY m.created_at DESC 
+                 LIMIT 1) AS latest_message
+            `),
+                db.raw(`
+                (SELECT m.created_at 
+                 FROM user_expert_messages m 
+                 WHERE m.chat_id = c.id 
+                 ORDER BY m.created_at DESC 
+                 LIMIT 1) AS last_time
+            `)
             )
-            .orderBy('c.created_at', 'desc')
+            .orderBy('last_time', 'desc')
             .limit(limit)
             .offset(offset);
     },
@@ -57,7 +64,7 @@ const UserExpertChat = {
             .orWhere('expert_id', user_id)
             .count('* as total');
         return parseInt(result[0].total, 10);
-    },    
+    },
 };
 
 module.exports = UserExpertChat;

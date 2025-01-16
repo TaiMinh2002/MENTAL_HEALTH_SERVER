@@ -44,6 +44,7 @@ exports.getChats = async (req, res) => {
             expert_name: chat.expert_name,
             expert_avatar: chat.expert_avatar,
             latest_message: chat.latest_message || null,
+            last_time: chat.last_time || null,
             created_at: chat.created_at,
         }));
 
