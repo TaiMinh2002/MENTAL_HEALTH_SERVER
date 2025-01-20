@@ -114,5 +114,20 @@ exports.refreshToken = (req, res) => {
 };
 
 exports.logout = (req, res) => {
-    res.json({ message: 'Logout successful' });
+    const { refreshToken, token } = req.query;
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: 'Refresh token is required to log out' });
+    }
+
+    try {
+        const user = jwt.verify(refreshToken, SECRET_KEY);
+        revokedTokens.push(refreshToken);
+        revokedTokens.push(token);
+
+        res.json({code:200, message: 'success' });
+    } catch (err) {
+        console.error('Failed to logout:', err);
+        res.status(401).json({ error: 'Invalid refresh token' });
+    }
 };
